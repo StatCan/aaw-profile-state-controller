@@ -7,10 +7,8 @@ import (
 
 	kubeflow "github.com/StatCan/kubeflow-controller/pkg/generated/clientset/versioned"
 	informers "github.com/StatCan/kubeflow-controller/pkg/generated/informers/externalversions"
-	"github.com/statcan/prob-notebook-controller/pkg/controller"
-	"github.com/statcan/prob-notebook-controller/pkg/signals"
-	istio "istio.io/client-go/pkg/clientset/versioned"
-	istioinformers "istio.io/client-go/pkg/informers/externalversions"
+	"github.com/statcan/profile-state-controller/pkg/controller"
+	"github.com/statcan/profile-state-controller/pkg/signals"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -40,30 +38,22 @@ func main() {
 		log.Fatalf("error building kubernetes clientset: %v", err)
 	}
 
-	istioclient, err := istio.NewForConfig(cfg)
-	if err != nil {
-		log.Fatalf("error building istio client: %v", err)
-	}
-
 	kubeflowclient, err := kubeflow.NewForConfig(cfg)
 	if err != nil {
 		log.Fatalf("error building kubeflow client: %v", err)
 	}
 
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclient, time.Second*30)
-	istioInformerFactory := istioinformers.NewSharedInformerFactory(istioclient, time.Second*30)
 	kubeflowInformerFactory := informers.NewSharedInformerFactory(kubeflowclient, time.Second*30)
 
 	ctlr := controller.NewController(
 		kubeclient,
-		istioclient,
 		kubeflowclient,
-		kubeflowInformerFactory.Kubeflow().V1().Notebooks(),
-		istioInformerFactory.Security().V1beta1().AuthorizationPolicies(),
+		kubeflowInformerFactory.Kubeflow().V1().Profiles(),
+		kubeInformerFactory.Core().V1().Pods(),
 	)
 
 	kubeInformerFactory.Start(stopCh)
-	istioInformerFactory.Start(stopCh)
 	kubeflowInformerFactory.Start(stopCh)
 
 	if err = ctlr.Run(2, stopCh); err != nil {

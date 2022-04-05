@@ -3,16 +3,16 @@ package controller
 import (
 	"fmt"
 	"time"
+	"strconv"
+	"strings"
 
 	v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
 	clientset "github.com/StatCan/kubeflow-controller/pkg/generated/clientset/versioned"
 	kubeflow "github.com/StatCan/kubeflow-controller/pkg/generated/clientset/versioned"
 	informers "github.com/StatCan/kubeflow-controller/pkg/generated/informers/externalversions/kubeflowcontroller/v1"
+	k8sinformers "k8s.io/client-go/informers/core/v1"
+	k8slisters "k8s.io/client-go/listers/core/v1"
 	"github.com/prometheus/common/log"
-	istiosecurityv1beta1 "istio.io/client-go/pkg/apis/security/v1beta1"
-	istio "istio.io/client-go/pkg/clientset/versioned"
-	istiosecurityinformers "istio.io/client-go/pkg/informers/externalversions/security/v1beta1"
-	istiosecuritylisters "istio.io/client-go/pkg/listers/security/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,18 +26,18 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
-const controllerAgentName = "prob-notebook-controller"
+const controllerAgentName = "internal-user-controller"
 
 // Controller responds to new resources and applies the necessary configuration
 type Controller struct{
 	kubeflowClientset				kubeflow.Interface
-	istioClientset					istio.Interface
 
-	notebookInformerLister			informers.NotebookInformer
-	notebookSynched					cache.InformerSynced
+	podInformer						k8sinformers.PodInformer
+	podLister						k8slisters.PodLister
+	podSynched						cache.InformerSynced
 
-	authorizationPoliciesListers	istiosecuritylisters.AuthorizationPolicyLister
-	authorizationPoliciesSynched	cache.InformerSynced
+	profileInformerLister			informers.ProfileInformer
+	profileSynched					cache.InformerSynced
 
 	workqueue						workqueue.RateLimitingInterface
 	recorder						record.EventRecorder
@@ -46,10 +46,9 @@ type Controller struct{
 // NewController creates a new Controller object.
 func NewController(
 	kubeclientset kubernetes.Interface,
-	istioclientset istio.Interface,
 	kubeflowclientset clientset.Interface,
-	notebookInformer informers.NotebookInformer,
-	authorizationPoliciesInformer istiosecurityinformers.AuthorizationPolicyInformer) *Controller {
+	profileInformer informers.ProfileInformer,
+	podInformer k8sinformers.PodInformer) *Controller {
 
 	// Create event broadcaster
 	log.Info("creating event broadcaster")
@@ -60,40 +59,39 @@ func NewController(
 
 	controller := &Controller{
 		kubeflowClientset:				kubeflowclientset,
-		istioClientset:					istioclientset,
-		notebookInformerLister:			notebookInformer,
-		notebookSynched:				notebookInformer.Informer().HasSynced,
-		authorizationPoliciesListers: 	authorizationPoliciesInformer.Lister(),
-		authorizationPoliciesSynched: 	authorizationPoliciesInformer.Informer().HasSynced,
-		workqueue:						workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "NotebookIstio"),
+		podInformer:					podInformer,
+		podLister:						podInformer.Lister(),
+		podSynched:						podInformer.Informer().HasSynced,
+		profileInformerLister:			profileInformer,
+		profileSynched: 				profileInformer.Informer().HasSynced,
+		workqueue:						workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "PodPolicy"),
 		recorder:						recorder,
 	}
 
-	log.Info("setting up event handlers")
-	authorizationPoliciesInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleObject,
+	profileInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleProfileObject,
 		UpdateFunc: func(old, new interface{}){
-			nap := new.(*istiosecurityv1beta1.AuthorizationPolicy)
-			oap := old.(*istiosecurityv1beta1.AuthorizationPolicy)
-			if nap.ResourceVersion == oap.ResourceVersion{
+			np := new.(*v1.Profile)
+			op := old.(*v1.Profile)
+			if np.ResourceVersion == op.ResourceVersion{
 				return
 			}
-			controller.handleObject(new)
+			controller.handleProfileObject(new)
 		},
-		DeleteFunc: controller.handleObject,
+		DeleteFunc: controller.handleProfileObject,
 	})
 
-	notebookInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.enqueueNotebook,
+	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handlePodObject,
 		UpdateFunc: func(old, new interface{}){
-			nnb := new.(*v1.Notebook)
-			onb := old.(*v1.Notebook)
-			if nnb.ResourceVersion == onb.ResourceVersion{
+			npod := new.(*corev1.Pod)
+			opod := old.(*corev1.Pod)
+			if npod.ResourceVersion == opod.ResourceVersion{
 				return
 			}
-			controller.enqueueNotebook(new)
+			controller.handlePodObject(new)
 		},
-		DeleteFunc: controller.enqueueNotebook,
+		DeleteFunc: controller.handlePodObject,
 	})
 
 	return controller
@@ -104,7 +102,7 @@ func (c *Controller) Run(threadiness int, stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
 	defer c.workqueue.ShutDown()
 
-	if ok := cache.WaitForCacheSync(stopCh, c.notebookSynched, c.authorizationPoliciesSynched); !ok {
+	if ok := cache.WaitForCacheSync(stopCh, c.podSynched, c.profileSynched); !ok {
 		return fmt.Errorf("failed to wait for caches to sync")
 	}
 
@@ -168,28 +166,28 @@ func (c *Controller) syncHandler(key string) error {
 		return nil
 	}
 
-	// Get the notebook object
-	notebook, err := c.notebookInformerLister.Lister().Notebooks(namespace).Get(name)
+	// Get the Pod object
+	Pod, err := c.podLister.Pods(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			utilruntime.HandleError(fmt.Errorf("notebook %q in work queue no longer exists", key))
+			utilruntime.HandleError(fmt.Errorf("Pod %q in work queue no longer exists", key))
 			return nil
 		}
 
 		return err
 	}
 
-	// Handle the authorizationPolicy
-	err = c.handleAuthorizationPolicy(notebook)
+	// Handle the Profile
+	err = c.handleProfile(Pod)
 	if err != nil {
-		log.Errorf("failed to handle authorization policy: %v", err)
+		log.Errorf("failed to handle profile: %v", err)
 		return err
 	}
 
 	return nil
 }
 
-func (c *Controller) enqueueNotebook(obj interface{}) {
+func (c *Controller) enqueuePod(obj interface{}) {
 	var key string
 	var err error
 	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
@@ -200,7 +198,7 @@ func (c *Controller) enqueueNotebook(obj interface{}) {
 	c.workqueue.Add(key)
 }
 
-func (c *Controller) handleObject(obj interface{}) {
+func (c *Controller) handleProfileObject(obj interface{}) {
 	var object metav1.Object
 	var ok bool
 
@@ -218,20 +216,47 @@ func (c *Controller) handleObject(obj interface{}) {
 		log.Infof("Recovered deleted object '%s' from tombstone", object.GetName())
 	}
 	log.Infof("Processing object: %s", object.GetName())
-	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
-		// If this object is not owned by a Notebook, we should not do anything more
-		// with it.
-		if ownerRef.Kind != "Notebook" {
-			return
-		}
 
-		notebook, err := c.notebookInformerLister.Lister().Notebooks(object.GetNamespace()).Get(ownerRef.Name)
-		if err != nil {
-			log.Infof("ignoring orphaned object '%s' of notebook '%s'", object.GetSelfLink(), ownerRef.Name)
-			return
+	namespace := object.ObjectMeta.Namespace
+	hasEmpOnlyFeatures := false
+	for _, pod := c.podLister.Pods(namespace) {
+		if sasImage(pod) {
+			hasEmpOnlyFeatures = true
+			break
 		}
-
-		c.enqueueNotebook(notebook)
-		return
 	}
+	object.ObjectMeta.Labels["state.aaw.statcan.gc.ca"] = strconv.FormatBool(hasEmpOnlyFeatures)
 }
+
+func sasImage(pod *corev1.Pod) bool {
+	image := pod.Spec.Containers[0].Image
+	sasImage := strings.HasPrefix(image, "k8scc01covidacr.azurecr.io/sas:")
+	return sasImage
+}
+
+func (c *Controller) handlePodObject(obj interface{}) {
+	var object metav1.Object
+	var ok bool
+
+	if object, ok = obj.(metav1.Object); !ok {
+		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			utilruntime.HandleError(fmt.Errorf("error decoding object, invalid type"))
+			return
+		}
+		object, ok = tombstone.Obj.(metav1.Object)
+		if !ok {
+			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
+			return
+		}
+		log.Infof("Recovered deleted object '%s' from tombstone", object.GetName())
+	}
+	log.Infof("Processing object: %s", object.GetName())
+
+	ns := object.ObjectMeta.Namespace
+	profile, err := c.profileInformerLister.Lister().Get(ns)
+	c.handleProfileObject(profile)
+	
+	
+}
+

@@ -1,4 +1,4 @@
-IMAGE := prob-notebook-controller
+IMAGE := profile-state-controller
 TAG := 0.0.1
 
 .PHONY: build run

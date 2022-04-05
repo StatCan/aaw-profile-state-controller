@@ -27,12 +27,12 @@ jobs:
 
     # Container build and push to a Azure Container registry (ACR)
     - run: |
-        docker build -f Dockerfile -t ${{ env.REGISTRY_NAME }}.azurecr.io/prob-notebook-controller:${{ github.sha }} .
+        docker build -f Dockerfile -t ${{ env.REGISTRY_NAME }}.azurecr.io/profile-state-controller:${{ github.sha }} .
 
     # Scan image for vulnerabilities
     - uses: Azure/container-scan@v0
       with:
-        image-name: ${{ env.REGISTRY_NAME }}.azurecr.io/prob-notebook-controller:${{ github.sha }}
+        image-name: ${{ env.REGISTRY_NAME }}.azurecr.io/profile-state-controller:${{ github.sha }}
         severity-threshold: CRITICAL
         run-quality-checks: false
 
@@ -45,4 +45,4 @@ jobs:
 
     # Push to a Azure Container registry (ACR)
     - run: |
-        docker push ${{ env.REGISTRY_NAME }}.azurecr.io/prob-notebook-controller:${{ github.sha }}
+        docker push ${{ env.REGISTRY_NAME }}.azurecr.io/profile-state-controller:${{ github.sha }}

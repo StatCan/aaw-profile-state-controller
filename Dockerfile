@@ -18,5 +18,5 @@ RUN CGO_ENABLED=0 go build
 
 # Generate final image
 FROM scratch
-COPY --from=build /work/prob-notebook-controller /prob-notebook-controller
-ENTRYPOINT [ "/prob-notebook-controller" ]
+COPY --from=build /work/profile-state-controller /profile-state-controller
+ENTRYPOINT [ "/profile-state-controller" ]

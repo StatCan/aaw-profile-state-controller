@@ -4,60 +4,66 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-
-	v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
+	"strings"
+	"strconv"
 	"github.com/prometheus/common/log"
-	"istio.io/api/security/v1beta1"
-	typev1beta1 "istio.io/api/type/v1beta1"
-	istiosecurityv1beta1 "istio.io/client-go/pkg/apis/security/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-const (
-	protectedBBlock = "protected-b-block"
+	v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 )
 
-func notebookAuthPolicyName(notebook *v1.Notebook) string {
-	return fmt.Sprintf("%s-%s", notebook.Name, protectedBBlock)
+func podProfileName(pod *corev1.Pod) string {
+	return fmt.Sprintf("%s", pod.Namespace)
 }
 
-func (c *Controller) handleAuthorizationPolicy(notebook *v1.Notebook) error {
+func sasImage(pod *corev1.Pod) string {
+	image := pod.Spec.Containers[0].Image
+	sasImage := strings.HasPrefix(image, "k8scc01covidacr.azurecr.io/sas:")
+	return strconv.FormatBool(sasImage)
+}
+
+func (c *Controller) handleProfile(pod *corev1.Pod) error {
 	ctx := context.Background()
 	
-	// //Find any authorization policy with the same name
-	ap, err := c.authorizationPoliciesListers.AuthorizationPolicies(notebook.Namespace).Get(notebookAuthPolicyName(notebook))
+	//Find any profile with the same name
+
+	existingProfiles, err := c.profileInformerLister.Lister().Get(podProfileName(pod))
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
-	//Check that we own this authorization policy
-	if ap != nil {
-		if !metav1.IsControlledBy(ap, notebook) {
-			msg := fmt.Sprintf("Authorization Policy \"%s/%s\" already exists and is not managed by the notebook", ap.Namespace, ap.Name)
-			c.recorder.Event(notebook, corev1.EventTypeWarning, "ErrResourceExists", msg)
+
+	//Check that we own this profile
+	/*if ap != nil {
+		if !metav1.IsControlledBy(ap, pod) {
+			msg := fmt.Sprintf("Profile \"%s/%s\" already exists and is not managed by the pod", ap.Namespace, ap.Name)
+			c.recorder.Event(pod, corev1.EventTypeWarning, "ErrResourceExists", msg)
 			return fmt.Errorf("%s", msg)
 		}
-	}
+	}*/
 
-	//New Authorization Policy
-	nap, err := c.generateAuthorizationPolicy(notebook)
+	//New Profile
+	newProfile, err := c.generateProfile(pod)
 	if err != nil {
 		return err
 	}
 
-	// If we don't have authorization policy, then let's make one
-	if ap == nil {
-		_, err = c.istioClientset.SecurityV1beta1().AuthorizationPolicies(notebook.Namespace).Create(ctx, nap, metav1.CreateOptions{})
+	// If we don't have a profile, then let's make one
+	if existingProfiles == nil {
+		log.Infof("create profile \"%s\"", newProfile.Name)
+
+		_, err = c.kubeflowClientset.KubeflowV1().Profiles().Create(ctx, newProfile, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
-	} else if !reflect.DeepEqual(ap.Spec, nap.Spec) { //We have an authorization policy, but is it the same
-		log.Infof("updated authorization Policy \"%s/%s\"", ap.Namespace, ap.Name)
+	} else if !reflect.DeepEqual(existingProfiles.Spec, newProfile.Spec) { //We have a profile, but is it the same
+		log.Infof("updated profile \"%s\"", existingProfiles.Name)
 
 		// Copy the new spec
-		ap.Spec = nap.Spec
+		existingProfiles.Spec = newProfile.Spec
 
-		_, err = c.istioClientset.SecurityV1beta1().AuthorizationPolicies(notebook.Namespace).Update(ctx, ap, metav1.UpdateOptions{})
+		_, err =  c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, existingProfiles, metav1.UpdateOptions{})
 		if err != nil {
 			return err
 		}
@@ -67,60 +73,23 @@ func (c *Controller) handleAuthorizationPolicy(notebook *v1.Notebook) error {
 }
 
 
-func (c *Controller) generateAuthorizationPolicy(notebook *v1.Notebook)(*istiosecurityv1beta1.AuthorizationPolicy, error){
-	ap := &istiosecurityv1beta1.AuthorizationPolicy{
+func (c *Controller) generateProfile(pod *corev1.Pod)(*v1.Profile, error){
+
+	existingProfiles := &v1.Profile{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: notebookAuthPolicyName(notebook),
-			Namespace: notebook.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(notebook, v1.SchemeGroupVersion.WithKind("Notebook")),
+			Labels: map[string]string{
+				"state.aaw.statcan.gc.ca": sasImage(pod),
 			},
+			Name: podProfileName(pod),
+			
 		},
-		Spec: v1beta1.AuthorizationPolicy{
-			Selector: &typev1beta1.WorkloadSelector{
-				MatchLabels: map[string]string{
-					"notebook-name": notebook.Name,
-					"data.statcan.gc.ca/classification": "protected-b",
-				},
+		Spec: v1.ProfileSpec{
+			Owner: rbacv1.Subject{
+				Kind: "User",
+				Name: "test",
 			},
-			Action: v1beta1.AuthorizationPolicy_DENY,
-			Rules: []*v1beta1.Rule{
-				{
-					To: []*v1beta1.Rule_To{
-						{
-							//Rstudio upload
-							Operation: &v1beta1.Operation{
-								Methods: []string{"POST"},
-								Paths: []string{fmt.Sprintf("/notebook/%s/%s/rstudio/upload", notebook.Namespace, notebook.Name)},
-							},
-						},
-						{
-							//Rstudio download
-							Operation: &v1beta1.Operation{
-								Methods: []string{"GET"},
-								Paths: []string{fmt.Sprintf("/notebook/%s/%s/rstudio/export*", notebook.Namespace, notebook.Name)},
-							},
-						},
-						{
-							//Jupyter download
-							Operation: &v1beta1.Operation{
-								Methods: []string{"GET"},
-								Paths: []string{fmt.Sprintf("/notebook/%s/%s/files*", notebook.Namespace, notebook.Name)},
-							},
-						},
-						{
-							//Jupyter download - convert as
-							Operation: &v1beta1.Operation{
-								Methods: []string{"GET"},
-								Paths: []string{fmt.Sprintf("/notebook/%s/%s/nbconvert*", notebook.Namespace, notebook.Name)},
-							},
-						},
-						// VS Code download - handled by the image
-					},
-				},
-			},
+			ResourceQuotaSpec: corev1.ResourceQuotaSpec{},
 		},
 	}
-
-	return ap, nil
+	return existingProfiles, nil
 }

@@ -9,7 +9,7 @@ This controller creates and deletes Authorization Policies based on Notebooks.
 The Authorization Policies block uploads and downloads on jupyterlab and rstudio images.
 
 ### How to use
-Go check the [README](https://github.com/StatCan/prob-notebook-controller/blob/master/kind/README.md) in the kind folder for instruction on running it locally.
+Go check the [README](https://github.com/StatCan/profile-state-controller/blob/master/kind/README.md) in the kind folder for instruction on running it locally.
 
 ### How to Contribute
 
@@ -33,7 +33,7 @@ Ce controller créer et supprime les Authorization Policies basées sur les Note
 Les Authorization Pol;icies bloquent les téléchargement ou téléversment de sur les image de jupyterlab et rstudio.
 
 ### Comment utiliser
-Aller voir le [README](https://github.com/StatCan/prob-notebook-controller/blob/master/kind/README.md) dans le dossier kind pour les instructions pour l'exécution locale.
+Aller voir le [README](https://github.com/StatCan/profile-state-controller/blob/master/kind/README.md) dans le dossier kind pour les instructions pour l'exécution locale.
 
 ### Comment contribuer
 

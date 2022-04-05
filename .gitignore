@@ -1,3 +1,4 @@
 prob-notebook-controller
-istio-test-config
-deploy/deploy.yaml
+istio
+istio-1.5.10/
+

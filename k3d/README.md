@@ -27,11 +27,11 @@ or check your working pods with http://kubeflow.muchk8s.wow/notebook/alice/jupyt
 
 ## To test the controller 
 ### Direct way
-`make controller-deploy` will create the daaas namespace and deploy the controller. Once it is, any notebook created will have their authorization policy created.
+`make controller-deploy` will create the daaasinternal namespace and deploy the controller. Once it is, any notebook created will have their authorization policy created.
 
 ### Alternatice way
-`go build -o prob-notebook-controller .`
-`./prob-notebook-controller -kubeconfig=istio-test-config`
+`go build -o profile-state-controller .`
+`./profile-state-controller -kubeconfig=istio-test-config`
 
 Once those two lines are executed, and it is working, for any notebook you create or delete, the corresponding authorization policy should be created or deleted.
 
