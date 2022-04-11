@@ -2,6 +2,8 @@ apiVersion: kubeflow.org/v1
 kind: Profile
 metadata:
   name: bob
+  labels: 
+    test: "true"
 spec:
   owner:
     kind: User

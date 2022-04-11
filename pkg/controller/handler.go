@@ -10,7 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
+	//v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
 	//rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/labels"
 )
@@ -45,40 +45,21 @@ func (c *Controller) handleProfile(pod *corev1.Pod) error {
 	if err != nil && !errors.IsNotFound(err) {
 		return err
 	}
+
 	if existingProfiles != nil {
-	
-		if existingProfiles != nil {
-			newProfile, err := c.generateProfile(pod, existingProfiles, hasEmpOnlyFeatures)
-			if err != nil {
-				return err
-			}
+		
+		if existingProfiles.Labels == nil {
+            existingProfiles.Labels = make(map[string]string)
+        }
+		
+		existingProfiles.Labels["state.aaw.statcan.gc.ca"] = strconv.FormatBool(hasEmpOnlyFeatures)
 
-			// Copy the new spec
-			existingProfiles.ObjectMeta = newProfile.ObjectMeta
-
-			_, err =  c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, existingProfiles, metav1.UpdateOptions{})
-			if err != nil {
-			return err
+		_, err =  c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, existingProfiles, metav1.UpdateOptions{})
+		if err != nil {
+		return err
 		}
-			//existingLabels["state.aaw.statcan.gc.ca"] = strconv.FormatBool(hasEmpOnlyFeatures)
-			//existingProfiles.SetLabels(existingLabels)
-		}
+		
 	}
 
 	return nil
-}
-
-
-func (c *Controller) generateProfile(pod *corev1.Pod, profile *v1.Profile, hasEmpOnlyFeatures bool)(*v1.Profile, error){
-
-	existingProfiles := &v1.Profile{
-		ObjectMeta: metav1.ObjectMeta{
-			Labels: map[string]string{
-				"state.aaw.statcan.gc.ca": strconv.FormatBool(hasEmpOnlyFeatures),
-			},
-			Name: profile.ObjectMeta.Name,
-			ResourceVersion: profile.ObjectMeta.ResourceVersion,
-		},
-	}
-	return existingProfiles, nil
 }
