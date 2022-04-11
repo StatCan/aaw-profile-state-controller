@@ -1,0 +1,9 @@
+apiVersion: kubeflow.org/v1
+kind: Profile
+metadata:
+  name: alice
+spec:
+  owner:
+    kind: User
+    name: alice@external.ca
+  resourceQuotaSpec: {}

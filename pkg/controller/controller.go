@@ -3,8 +3,6 @@ package controller
 import (
 	"fmt"
 	"time"
-	"strconv"
-	"strings"
 
 	v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
 	clientset "github.com/StatCan/kubeflow-controller/pkg/generated/clientset/versioned"
@@ -15,7 +13,7 @@ import (
 	"github.com/prometheus/common/log"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -68,30 +66,32 @@ func NewController(
 		recorder:						recorder,
 	}
 
+	// Set up an event handler for when Profile resources change
 	profileInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handleProfileObject,
+		AddFunc: controller.enqueueProfile,
 		UpdateFunc: func(old, new interface{}){
 			np := new.(*v1.Profile)
 			op := old.(*v1.Profile)
 			if np.ResourceVersion == op.ResourceVersion{
 				return
 			}
-			controller.handleProfileObject(new)
+			controller.enqueueProfile(new)
 		},
-		DeleteFunc: controller.handleProfileObject,
+		DeleteFunc: controller.enqueueProfile,
 	})
 
+	// Set up an event handler for when Pod resources change
 	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.handlePodObject,
-		UpdateFunc: func(old, new interface{}){
+		AddFunc: controller.enqueuePod,
+		UpdateFunc: func(old, new interface{}) {
 			npod := new.(*corev1.Pod)
 			opod := old.(*corev1.Pod)
-			if npod.ResourceVersion == opod.ResourceVersion{
+			if npod.ResourceVersion == opod.ResourceVersion {
 				return
 			}
-			controller.handlePodObject(new)
+			controller.enqueuePod(new)
 		},
-		DeleteFunc: controller.handlePodObject,
+		DeleteFunc: controller.enqueuePod,
 	})
 
 	return controller
@@ -166,25 +166,34 @@ func (c *Controller) syncHandler(key string) error {
 		return nil
 	}
 
-	// Get the Pod object
-	Pod, err := c.podLister.Pods(namespace).Get(name)
+	// Get the pods object
+	pods, err := c.podLister.Pods(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			utilruntime.HandleError(fmt.Errorf("Pod %q in work queue no longer exists", key))
+			utilruntime.HandleError(fmt.Errorf("pod %q in work queue no longer exists", key))
 			return nil
 		}
-
 		return err
 	}
 
-	// Handle the Profile
-	err = c.handleProfile(Pod)
+	// Handle the profile
+	err = c.handleProfile(pods)
 	if err != nil {
 		log.Errorf("failed to handle profile: %v", err)
 		return err
 	}
 
 	return nil
+}
+
+func (c *Controller) enqueueProfile(obj interface{}) {
+	var key string
+	var err error
+	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	c.workqueue.Add(key)
 }
 
 func (c *Controller) enqueuePod(obj interface{}) {
@@ -194,14 +203,12 @@ func (c *Controller) enqueuePod(obj interface{}) {
 		utilruntime.HandleError(err)
 		return
 	}
-
 	c.workqueue.Add(key)
 }
 
-func (c *Controller) handleProfileObject(obj interface{}) {
+/*func (c *Controller) handleObject(obj interface{}) {
 	var object metav1.Object
 	var ok bool
-
 	if object, ok = obj.(metav1.Object); !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
@@ -216,47 +223,20 @@ func (c *Controller) handleProfileObject(obj interface{}) {
 		log.Infof("Recovered deleted object '%s' from tombstone", object.GetName())
 	}
 	log.Infof("Processing object: %s", object.GetName())
-
-	namespace := object.ObjectMeta.Namespace
-	hasEmpOnlyFeatures := false
-	for _, pod := c.podLister.Pods(namespace) {
-		if sasImage(pod) {
-			hasEmpOnlyFeatures = true
-			break
-		}
-	}
-	object.ObjectMeta.Labels["state.aaw.statcan.gc.ca"] = strconv.FormatBool(hasEmpOnlyFeatures)
-}
-
-func sasImage(pod *corev1.Pod) bool {
-	image := pod.Spec.Containers[0].Image
-	sasImage := strings.HasPrefix(image, "k8scc01covidacr.azurecr.io/sas:")
-	return sasImage
-}
-
-func (c *Controller) handlePodObject(obj interface{}) {
-	var object metav1.Object
-	var ok bool
-
-	if object, ok = obj.(metav1.Object); !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object, invalid type"))
+	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
+		// If this object is not owned by a Profile, we should not do anything more
+		// with it.
+		if ownerRef.Kind != "Profile" {
 			return
 		}
-		object, ok = tombstone.Obj.(metav1.Object)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
+		log.Infof("OWNER REF %v %v", ownerRef.Name, ownerRef.Kind)
+		profile, err := c.profileInformerLister.Lister().Get(ownerRef.Name)
+		if err != nil {
+			log.Infof("ignoring orphaned object '%s' of profile '%s'", object.GetSelfLink(), ownerRef.Name)
 			return
 		}
-		log.Infof("Recovered deleted object '%s' from tombstone", object.GetName())
+
+		c.enqueueProfile(profile)
+		return
 	}
-	log.Infof("Processing object: %s", object.GetName())
-
-	ns := object.ObjectMeta.Namespace
-	profile, err := c.profileInformerLister.Lister().Get(ns)
-	c.handleProfileObject(profile)
-	
-	
-}
-
+}*/

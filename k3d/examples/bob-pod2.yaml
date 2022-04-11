@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-false
+  namespace: bob
+spec:
+  containers:
+    - name: bob
+      image: "jupyter/datascience-notebook"
+      resources:
+        limits:
+          cpu: "100m"
+          memory: "30Mi"

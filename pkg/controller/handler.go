@@ -3,69 +3,65 @@ package controller
 import (
 	"context"
 	"fmt"
-	"reflect"
+	//"reflect"
 	"strings"
 	"strconv"
-	"github.com/prometheus/common/log"
+	//"github.com/prometheus/common/log"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
+	//rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 func podProfileName(pod *corev1.Pod) string {
 	return fmt.Sprintf("%s", pod.Namespace)
 }
 
-func sasImage(pod *corev1.Pod) string {
+func sasImage(pod *corev1.Pod) bool {
 	image := pod.Spec.Containers[0].Image
 	sasImage := strings.HasPrefix(image, "k8scc01covidacr.azurecr.io/sas:")
-	return strconv.FormatBool(sasImage)
+	return sasImage
 }
 
 func (c *Controller) handleProfile(pod *corev1.Pod) error {
 	ctx := context.Background()
 	
-	//Find any profile with the same name
-
-	existingProfiles, err := c.profileInformerLister.Lister().Get(podProfileName(pod))
-	if err != nil && !errors.IsNotFound(err) {
-		return err
-	}
-
-	//Check that we own this profile
-	/*if ap != nil {
-		if !metav1.IsControlledBy(ap, pod) {
-			msg := fmt.Sprintf("Profile \"%s/%s\" already exists and is not managed by the pod", ap.Namespace, ap.Name)
-			c.recorder.Event(pod, corev1.EventTypeWarning, "ErrResourceExists", msg)
-			return fmt.Errorf("%s", msg)
-		}
-	}*/
-
-	//New Profile
-	newProfile, err := c.generateProfile(pod)
+	namespace := pod.GetNamespace()
+	hasEmpOnlyFeatures := false
+	pods, err := c.podLister.Pods(namespace).List(labels.Everything())
 	if err != nil {
 		return err
 	}
+	for _, pod := range pods {
+		if sasImage(pod) {
+			hasEmpOnlyFeatures = true
+			break
+		}
+	}
 
-	// If we don't have a profile, then let's make one
-	if existingProfiles == nil {
-		log.Infof("create profile \"%s\"", newProfile.Name)
+	existingProfiles, err := c.profileInformerLister.Lister().Get(namespace)
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+	if existingProfiles != nil {
+	
+		if existingProfiles != nil {
+			newProfile, err := c.generateProfile(pod, existingProfiles, hasEmpOnlyFeatures)
+			if err != nil {
+				return err
+			}
 
-		_, err = c.kubeflowClientset.KubeflowV1().Profiles().Create(ctx, newProfile, metav1.CreateOptions{})
-		if err != nil {
+			// Copy the new spec
+			existingProfiles.ObjectMeta = newProfile.ObjectMeta
+
+			_, err =  c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, existingProfiles, metav1.UpdateOptions{})
+			if err != nil {
 			return err
 		}
-	} else if !reflect.DeepEqual(existingProfiles.Spec, newProfile.Spec) { //We have a profile, but is it the same
-		log.Infof("updated profile \"%s\"", existingProfiles.Name)
-
-		// Copy the new spec
-		existingProfiles.Spec = newProfile.Spec
-
-		_, err =  c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, existingProfiles, metav1.UpdateOptions{})
-		if err != nil {
-			return err
+			//existingLabels["state.aaw.statcan.gc.ca"] = strconv.FormatBool(hasEmpOnlyFeatures)
+			//existingProfiles.SetLabels(existingLabels)
 		}
 	}
 
@@ -73,22 +69,15 @@ func (c *Controller) handleProfile(pod *corev1.Pod) error {
 }
 
 
-func (c *Controller) generateProfile(pod *corev1.Pod)(*v1.Profile, error){
+func (c *Controller) generateProfile(pod *corev1.Pod, profile *v1.Profile, hasEmpOnlyFeatures bool)(*v1.Profile, error){
 
 	existingProfiles := &v1.Profile{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
-				"state.aaw.statcan.gc.ca": sasImage(pod),
+				"state.aaw.statcan.gc.ca": strconv.FormatBool(hasEmpOnlyFeatures),
 			},
-			Name: podProfileName(pod),
-			
-		},
-		Spec: v1.ProfileSpec{
-			Owner: rbacv1.Subject{
-				Kind: "User",
-				Name: "test",
-			},
-			ResourceQuotaSpec: corev1.ResourceQuotaSpec{},
+			Name: profile.ObjectMeta.Name,
+			ResourceVersion: profile.ObjectMeta.ResourceVersion,
 		},
 	}
 	return existingProfiles, nil
