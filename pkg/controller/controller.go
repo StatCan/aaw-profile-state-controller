@@ -5,15 +5,17 @@ import (
 	"time"
 
 	v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
-	clientset "github.com/StatCan/kubeflow-controller/pkg/generated/clientset/versioned"
 	kubeflow "github.com/StatCan/kubeflow-controller/pkg/generated/clientset/versioned"
 	informers "github.com/StatCan/kubeflow-controller/pkg/generated/informers/externalversions/kubeflowcontroller/v1"
+
+	//v1 "github.com/StatCan/kubeflow-apis/apis/kubeflow/v1"
+	//kubeflow "github.com/StatCan/kubeflow-apis/clientset/versioned"
+	//informers "github.com/StatCan/kubeflow-apis/informers/externalversions/kubeflow/v1"
+	log "github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	k8sinformers "k8s.io/client-go/informers/core/v1"
 	k8slisters "k8s.io/client-go/listers/core/v1"
-	"github.com/prometheus/common/log"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -27,24 +29,24 @@ import (
 const controllerAgentName = "internal-user-controller"
 
 // Controller responds to new resources and applies the necessary configuration
-type Controller struct{
-	kubeflowClientset				kubeflow.Interface
+type Controller struct {
+	kubeflowClientset kubeflow.Interface
 
-	podInformer						k8sinformers.PodInformer
-	podLister						k8slisters.PodLister
-	podSynched						cache.InformerSynced
+	podInformer k8sinformers.PodInformer
+	podLister   k8slisters.PodLister
+	podSynched  cache.InformerSynced
 
-	profileInformerLister			informers.ProfileInformer
-	profileSynched					cache.InformerSynced
+	profileInformerLister informers.ProfileInformer
+	profileSynched        cache.InformerSynced
 
-	workqueue						workqueue.RateLimitingInterface
-	recorder						record.EventRecorder
+	workqueue workqueue.RateLimitingInterface
+	recorder  record.EventRecorder
 }
 
 // NewController creates a new Controller object.
 func NewController(
 	kubeclientset kubernetes.Interface,
-	kubeflowclientset clientset.Interface,
+	kubeflowclientset kubeflow.Interface,
 	profileInformer informers.ProfileInformer,
 	podInformer k8sinformers.PodInformer) *Controller {
 
@@ -56,23 +58,23 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeflowClientset:				kubeflowclientset,
-		podInformer:					podInformer,
-		podLister:						podInformer.Lister(),
-		podSynched:						podInformer.Informer().HasSynced,
-		profileInformerLister:			profileInformer,
-		profileSynched: 				profileInformer.Informer().HasSynced,
-		workqueue:						workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "PodPolicy"),
-		recorder:						recorder,
+		kubeflowClientset:     kubeflowclientset,
+		podInformer:           podInformer,
+		podLister:             podInformer.Lister(),
+		podSynched:            podInformer.Informer().HasSynced,
+		profileInformerLister: profileInformer,
+		profileSynched:        profileInformer.Informer().HasSynced,
+		workqueue:             workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "PodPolicy"),
+		recorder:              recorder,
 	}
 
 	// Set up an event handler for when Profile resources change
 	profileInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueProfile,
-		UpdateFunc: func(old, new interface{}){
+		UpdateFunc: func(old, new interface{}) {
 			np := new.(*v1.Profile)
 			op := old.(*v1.Profile)
-			if np.ResourceVersion == op.ResourceVersion{
+			if np.ResourceVersion == op.ResourceVersion {
 				return
 			}
 			controller.enqueueProfile(new)
@@ -82,18 +84,29 @@ func NewController(
 
 	// Set up an event handler for when Pod resources change
 	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: controller.enqueuePod,
+		AddFunc: func(npod interface{}) {
+			pod := npod.(*corev1.Pod)
+			namespace := pod.GetNamespace()
+			existingProfiles, _ := controller.profileInformerLister.Lister().Get(namespace)
+			controller.enqueueProfile(existingProfiles)
+		},
 		UpdateFunc: func(old, new interface{}) {
 			npod := new.(*corev1.Pod)
 			opod := old.(*corev1.Pod)
 			if npod.ResourceVersion == opod.ResourceVersion {
 				return
 			}
-			controller.enqueuePod(new)
+			namespace := npod.GetNamespace()
+			existingProfiles, _ := controller.profileInformerLister.Lister().Get(namespace)
+			controller.enqueueProfile(existingProfiles)
 		},
-		DeleteFunc: controller.enqueuePod,
+		DeleteFunc: func(npod interface{}) {
+			pod := npod.(*corev1.Pod)
+			namespace := pod.GetNamespace()
+			existingProfiles, _ := controller.profileInformerLister.Lister().Get(namespace)
+			controller.enqueueProfile(existingProfiles)
+		},
 	})
-
 	return controller
 }
 
@@ -160,24 +173,19 @@ func (c *Controller) processNextWorkItem() bool {
 }
 
 func (c *Controller) syncHandler(key string) error {
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	namespace, _, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
 		return nil
 	}
-
-	// Get the pods object
-	pods, err := c.podLister.Pods(namespace).Get(name)
+	profile, err := c.profileInformerLister.Lister().Get(key)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			utilruntime.HandleError(fmt.Errorf("pod %q in work queue no longer exists", key))
-			return nil
-		}
+		log.Errorf("failed to get profile: %v %v", err, namespace)
 		return err
 	}
 
 	// Handle the profile
-	err = c.handleProfile(pods)
+	err = c.handleProfile(profile)
 	if err != nil {
 		log.Errorf("failed to handle profile: %v", err)
 		return err
@@ -196,6 +204,7 @@ func (c *Controller) enqueueProfile(obj interface{}) {
 	c.workqueue.Add(key)
 }
 
+/*
 func (c *Controller) enqueuePod(obj interface{}) {
 	var key string
 	var err error
@@ -206,7 +215,7 @@ func (c *Controller) enqueuePod(obj interface{}) {
 	c.workqueue.Add(key)
 }
 
-/*func (c *Controller) handleObject(obj interface{}) {
+func (c *Controller) handleObject(obj interface{}) {
 	var object metav1.Object
 	var ok bool
 	if object, ok = obj.(metav1.Object); !ok {

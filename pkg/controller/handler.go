@@ -2,22 +2,18 @@ package controller
 
 import (
 	"context"
-	"fmt"
+	//"fmt"
 	//"reflect"
-	"strings"
 	"strconv"
+	"strings"
+
 	//"github.com/prometheus/common/log"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	//"k8s.io/apimachinery/pkg/api/errors"
+	v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	//v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
-	//rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/labels"
 )
-
-func podProfileName(pod *corev1.Pod) string {
-	return fmt.Sprintf("%s", pod.Namespace)
-}
 
 func sasImage(pod *corev1.Pod) bool {
 	image := pod.Spec.Containers[0].Image
@@ -25,11 +21,12 @@ func sasImage(pod *corev1.Pod) bool {
 	return sasImage
 }
 
-func (c *Controller) handleProfile(pod *corev1.Pod) error {
+func (c *Controller) handleProfile(profile *v1.Profile) error {
 	ctx := context.Background()
-	
-	namespace := pod.GetNamespace()
+
+	namespace := profile.Name
 	hasEmpOnlyFeatures := false
+
 	pods, err := c.podLister.Pods(namespace).List(labels.Everything())
 	if err != nil {
 		return err
@@ -41,24 +38,21 @@ func (c *Controller) handleProfile(pod *corev1.Pod) error {
 		}
 	}
 
-	existingProfiles, err := c.profileInformerLister.Lister().Get(namespace)
-	if err != nil && !errors.IsNotFound(err) {
-		return err
-	}
+	//TODO: take out profile nil
 
-	if existingProfiles != nil {
-		
-		if existingProfiles.Labels == nil {
-            existingProfiles.Labels = make(map[string]string)
-        }
-		
-		existingProfiles.Labels["state.aaw.statcan.gc.ca"] = strconv.FormatBool(hasEmpOnlyFeatures)
+	if profile != nil {
 
-		_, err =  c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, existingProfiles, metav1.UpdateOptions{})
-		if err != nil {
-		return err
+		if profile.Labels == nil {
+			profile.Labels = make(map[string]string)
 		}
-		
+
+		profile.Labels["state.aaw.statcan.gc.ca"] = strconv.FormatBool(hasEmpOnlyFeatures)
+
+		_, err = c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, profile, metav1.UpdateOptions{})
+		if err != nil {
+			return err
+		}
+
 	}
 
 	return nil

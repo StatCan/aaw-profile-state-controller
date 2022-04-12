@@ -32,12 +32,16 @@ alice alice2 bob:
 	kubectl create namespace $@ || true
 
 create-pods:
-	kubectl apply -f ./podExamples/alice-pod-sas.yaml || true
-	kubectl apply -f ./podExamples/alice-pod.yaml || true
-	kubectl apply -f ./podExamples/bob-pod.yaml || true
+	kubectl apply -f ./examples/alice-pod-sas.yaml || true
+	kubectl apply -f ./examples/alice-pod.yaml || true
+	kubectl apply -f ./examples/bob-pod.yaml || true
+
+create-profiles:
+	kubectl apply -f ./examples/alice-profile.yaml || true
+	kubectl apply -f ./examples/bob-profile.yaml || true
 
 delete-pods:
-	kubectl delete -f ./podExamples/alice-pod-sas.yaml || true
-	kubectl delete -f ./podExamples/alice-pod.yaml || true
-	kubectl delete -f ./podExamples/bob-pod.yaml || true
+	kubectl delete -f ./examples/alice-pod-sas.yaml || true
+	kubectl delete -f ./examples/alice-pod.yaml || true
+	kubectl delete -f ./examples/bob-pod.yaml || true
 
