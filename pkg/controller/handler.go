@@ -39,7 +39,7 @@ func (c *Controller) handleProfile(profile *v1.Profile) error {
 		profile.Labels = make(map[string]string)
 	}
 
-	profile.Labels["state.aaw.statcan.gc.ca"] = strconv.FormatBool(hasEmpOnlyFeatures)
+	profile.Labels["state.aaw.statcan.gc.ca/employee-only-features"] = strconv.FormatBool(hasEmpOnlyFeatures)
 
 	_, err = c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, profile, metav1.UpdateOptions{})
 	if err != nil {

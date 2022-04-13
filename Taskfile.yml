@@ -144,7 +144,15 @@ tasks:
     cmds:
       - "k3d cluster stop {{.CLUSTER_NAME}}"
 
-  create-namespaces: 
+  create:users:
+    prefix: ⚙️ users > create
+    desc: create user namespaces, profiles, and pods 
+    cmds:
+      - task: create:namespaces
+      - task: create:pods
+      - task: create:profiles
+
+  create:namespaces: 
     prefix: ⚙️ namespace > create
     desc: create namespaces for users
     cmds:

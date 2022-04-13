@@ -9,7 +9,6 @@ replace k8s.io/api => k8s.io/api v0.19.2
 replace k8s.io/apimachinery => k8s.io/apimachinery v0.19.2
 
 require (
-	github.com/StatCan/kubeflow-apis v0.0.0-20220217170523-72ec9dc9b637
 	github.com/StatCan/kubeflow-controller v0.0.0-20210603194710-1d0bfdc8ebde
 	github.com/sirupsen/logrus v1.8.1
 	k8s.io/api v0.23.3
