@@ -2,15 +2,12 @@ package controller
 
 import (
 	"context"
-	//"fmt"
-	//"reflect"
 	"strconv"
 	"strings"
 
-	//"github.com/prometheus/common/log"
-	corev1 "k8s.io/api/core/v1"
-	//"k8s.io/apimachinery/pkg/api/errors"
 	v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
+	log "github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 )
@@ -38,22 +35,18 @@ func (c *Controller) handleProfile(profile *v1.Profile) error {
 		}
 	}
 
-	//TODO: take out profile nil
-
-	if profile != nil {
-
-		if profile.Labels == nil {
-			profile.Labels = make(map[string]string)
-		}
-
-		profile.Labels["state.aaw.statcan.gc.ca"] = strconv.FormatBool(hasEmpOnlyFeatures)
-
-		_, err = c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, profile, metav1.UpdateOptions{})
-		if err != nil {
-			return err
-		}
-
+	if profile.Labels == nil {
+		profile.Labels = make(map[string]string)
 	}
+
+	profile.Labels["state.aaw.statcan.gc.ca"] = strconv.FormatBool(hasEmpOnlyFeatures)
+
+	_, err = c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, profile, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Updated profile %v with label", namespace)
 
 	return nil
 }

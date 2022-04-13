@@ -84,30 +84,25 @@ func NewController(
 
 	// Set up an event handler for when Pod resources change
 	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(npod interface{}) {
-			pod := npod.(*corev1.Pod)
-			namespace := pod.GetNamespace()
-			existingProfiles, _ := controller.profileInformerLister.Lister().Get(namespace)
-			controller.enqueueProfile(existingProfiles)
-		},
+		AddFunc: controller.handlePodObject,
 		UpdateFunc: func(old, new interface{}) {
 			npod := new.(*corev1.Pod)
 			opod := old.(*corev1.Pod)
 			if npod.ResourceVersion == opod.ResourceVersion {
 				return
 			}
-			namespace := npod.GetNamespace()
-			existingProfiles, _ := controller.profileInformerLister.Lister().Get(namespace)
-			controller.enqueueProfile(existingProfiles)
+			controller.handlePodObject(npod)
 		},
-		DeleteFunc: func(npod interface{}) {
-			pod := npod.(*corev1.Pod)
-			namespace := pod.GetNamespace()
-			existingProfiles, _ := controller.profileInformerLister.Lister().Get(namespace)
-			controller.enqueueProfile(existingProfiles)
-		},
+		DeleteFunc: controller.handlePodObject,
 	})
 	return controller
+}
+
+func (c *Controller) handlePodObject(npod interface{}) {
+	pod := npod.(*corev1.Pod)
+	namespace := pod.GetNamespace()
+	existingProfiles, _ := c.profileInformerLister.Lister().Get(namespace)
+	c.enqueueProfile(existingProfiles)
 }
 
 //Run runs the controller
@@ -173,14 +168,15 @@ func (c *Controller) processNextWorkItem() bool {
 }
 
 func (c *Controller) syncHandler(key string) error {
-	namespace, _, err := cache.SplitMetaNamespaceKey(key)
+	_, _, err := cache.SplitMetaNamespaceKey(key)
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
 		return nil
 	}
+
 	profile, err := c.profileInformerLister.Lister().Get(key)
 	if err != nil {
-		log.Errorf("failed to get profile: %v %v", err, namespace)
+		log.Errorf("failed to get profile: %v", err)
 		return err
 	}
 
@@ -203,49 +199,3 @@ func (c *Controller) enqueueProfile(obj interface{}) {
 	}
 	c.workqueue.Add(key)
 }
-
-/*
-func (c *Controller) enqueuePod(obj interface{}) {
-	var key string
-	var err error
-	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-		utilruntime.HandleError(err)
-		return
-	}
-	c.workqueue.Add(key)
-}
-
-func (c *Controller) handleObject(obj interface{}) {
-	var object metav1.Object
-	var ok bool
-	if object, ok = obj.(metav1.Object); !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object, invalid type"))
-			return
-		}
-		object, ok = tombstone.Obj.(metav1.Object)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
-			return
-		}
-		log.Infof("Recovered deleted object '%s' from tombstone", object.GetName())
-	}
-	log.Infof("Processing object: %s", object.GetName())
-	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
-		// If this object is not owned by a Profile, we should not do anything more
-		// with it.
-		if ownerRef.Kind != "Profile" {
-			return
-		}
-		log.Infof("OWNER REF %v %v", ownerRef.Name, ownerRef.Kind)
-		profile, err := c.profileInformerLister.Lister().Get(ownerRef.Name)
-		if err != nil {
-			log.Infof("ignoring orphaned object '%s' of profile '%s'", object.GetSelfLink(), ownerRef.Name)
-			return
-		}
-
-		c.enqueueProfile(profile)
-		return
-	}
-}*/
