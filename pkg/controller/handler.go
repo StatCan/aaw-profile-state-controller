@@ -12,15 +12,20 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
+const SAS_PREFIX = "k8scc01covidacr.azurecr.io/sas:"
+const PROFILE_LABEL = "state.aaw.statcan.gc.ca/employee-only-features"
+
 func sasImage(pod *corev1.Pod) bool {
+	// TODO: how do we know the 0th container is the SAS pod?
+	// should range over all containers and do this check.
 	image := pod.Spec.Containers[0].Image
-	sasImage := strings.HasPrefix(image, "k8scc01covidacr.azurecr.io/sas:")
+	// TODO: should this string be moved to a global constant in case
+	// it needs to be changed?
+	sasImage := strings.HasPrefix(image, SAS_PREFIX)
 	return sasImage
 }
 
 func (c *Controller) handleProfile(profile *v1.Profile) error {
-	ctx := context.Background()
-
 	namespace := profile.Name
 	hasEmpOnlyFeatures := false
 
@@ -39,8 +44,9 @@ func (c *Controller) handleProfile(profile *v1.Profile) error {
 		profile.Labels = make(map[string]string)
 	}
 
-	profile.Labels["state.aaw.statcan.gc.ca/employee-only-features"] = strconv.FormatBool(hasEmpOnlyFeatures)
-
+	profile.Labels[PROFILE_LABEL] = strconv.FormatBool(hasEmpOnlyFeatures)
+	// TODO: should we get the context closer to where it is used in the code?
+	ctx := context.Background()
 	_, err = c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, profile, metav1.UpdateOptions{})
 	if err != nil {
 		return err
