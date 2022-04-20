@@ -158,6 +158,7 @@ tasks:
     cmds:
       - "{{.KUBECTL}} create ns alice"
       - "{{.KUBECTL}} create ns bob"
+      - "{{.KUBECTL}} create ns sam"
 
   create:pods:
     prefix: ⚙️ pods > create

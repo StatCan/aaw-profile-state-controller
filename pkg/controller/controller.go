@@ -101,12 +101,9 @@ func NewController(
 func (c *Controller) handlePodObject(npod interface{}) {
 	pod := npod.(*corev1.Pod)
 	namespace := pod.GetNamespace()
-	// TODO: handle this error - it could be the case that the pod is not
-	// associated with a kubeflow namespace, which would throw key error
 	existingProfile, err := c.profileInformerLister.Lister().Get(namespace)
-	// If we are not in a kubeflow profile namespace, there is no work to
-	// be done. Myabe add debug log msg?
 	if err != nil {
+		log.Errorf("failed to get profile: %v", err)
 		return
 	}
 	c.enqueueProfile(existingProfile)
@@ -145,8 +142,6 @@ func (c *Controller) processNextWorkItem() bool {
 		return false
 	}
 
-	// TODO: why is this function defined inline and immediately called?
-	// why not write the logic directly in the body of processNextWorkItem?
 	err := func(obj interface{}) error {
 		defer c.workqueue.Done(obj)
 		var key string
@@ -177,13 +172,6 @@ func (c *Controller) processNextWorkItem() bool {
 }
 
 func (c *Controller) syncHandler(key string) error {
-	// TODO: does this code block need to be here?
-	// It looks like we don't use the outputs.
-	// _, _, err := cache.SplitMetaNamespaceKey(key)
-	// if err != nil {
-	// 	utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
-	// 	return nil
-	// }
 
 	profile, err := c.profileInformerLister.Lister().Get(key)
 	if err != nil {
