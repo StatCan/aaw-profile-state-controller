@@ -171,6 +171,12 @@ tasks:
     desc: create profiles in cluster/profiles.yaml
     cmds:
       - "{{.KUBEAPPLY}} -f ./cluster/profiles.yaml"
+
+  create:rolebindings:
+    prefix: ⚙️ rolebindings > create
+    desc: create rolebindings in cluster/rolebindings.yaml
+    cmds:
+      - "{{.KUBEAPPLY}} -f ./cluster/rolebindings.yaml"
       
   go:deploy:
     desc: build go files and run 

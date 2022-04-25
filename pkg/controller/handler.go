@@ -13,7 +13,8 @@ import (
 )
 
 const SAS_PREFIX = "k8scc01covidacr.azurecr.io/sas:"
-const PROFILE_LABEL = "state.aaw.statcan.gc.ca/employee-only-features"
+const FEATURES_LABEL = "state.aaw.statcan.gc.ca/employee-only-features"
+const RB_LABEL = "state.aaw.statcan.gc.ca/non-employee-user"
 
 func sasImage(pod *corev1.Pod) bool {
 
@@ -27,14 +28,36 @@ func sasImage(pod *corev1.Pod) bool {
 	return false
 }
 
+func isEmployee(email string) bool {
+
+	employeeDomains := [2]string{"cloud.statcan.ca", "statcan.gc.ca"} // Intialized with values
+	for _, domain := range employeeDomains {
+		if strings.HasSuffix(email, domain) {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *Controller) handleProfile(profile *v1.Profile) error {
 	namespace := profile.Name
 	hasEmpOnlyFeatures := false
 
+	// label set from rolebindings, if there are no rolebindings, then the default is that they are external
+	nonEmployeeUser := true
+
 	pods, err := c.podLister.Pods(namespace).List(labels.Everything())
+
 	if err != nil {
 		return err
 	}
+
+	roleBindings, err := c.roleBindingLister.RoleBindings(namespace).List(labels.Everything())
+
+	if err != nil {
+		return err
+	}
+
 	for _, pod := range pods {
 		if sasImage(pod) {
 			hasEmpOnlyFeatures = true
@@ -42,11 +65,24 @@ func (c *Controller) handleProfile(profile *v1.Profile) error {
 		}
 	}
 
+	for _, roleBindings := range roleBindings {
+		for _, subject := range roleBindings.Subjects {
+			email := subject.Name
+			if strings.Contains(email, "@") {
+				if isEmployee(email) {
+					nonEmployeeUser = false
+					break
+				}
+			}
+		}
+	}
+
 	if profile.Labels == nil {
 		profile.Labels = make(map[string]string)
 	}
 
-	profile.Labels[PROFILE_LABEL] = strconv.FormatBool(hasEmpOnlyFeatures)
+	profile.Labels[FEATURES_LABEL] = strconv.FormatBool(hasEmpOnlyFeatures)
+	profile.Labels[RB_LABEL] = strconv.FormatBool(nonEmployeeUser)
 
 	ctx := context.Background()
 	_, err = c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, profile, metav1.UpdateOptions{})
@@ -54,7 +90,7 @@ func (c *Controller) handleProfile(profile *v1.Profile) error {
 		return err
 	}
 
-	log.Infof("Updated profile %v with label", namespace)
+	log.Infof("Updated profile %v with labels", namespace)
 
 	return nil
 }

@@ -15,12 +15,12 @@ import (
 )
 
 var (
-	masterURL      string
-	kubeconfig     string
+	masterURL  string
+	kubeconfig string
 )
 
 func init() {
-    flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
+	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.StringVar(&masterURL, "master", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
 	flag.Parse()
 }
@@ -51,6 +51,7 @@ func main() {
 		kubeflowclient,
 		kubeflowInformerFactory.Kubeflow().V1().Profiles(),
 		kubeInformerFactory.Core().V1().Pods(),
+		kubeInformerFactory.Rbac().V1().RoleBindings(),
 	)
 
 	kubeInformerFactory.Start(stopCh)
