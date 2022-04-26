@@ -8,6 +8,7 @@ import (
 	v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
 	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 )
@@ -15,6 +16,8 @@ import (
 const SAS_PREFIX = "k8scc01covidacr.azurecr.io/sas:"
 const FEATURES_LABEL = "state.aaw.statcan.gc.ca/employee-only-features"
 const RB_LABEL = "state.aaw.statcan.gc.ca/non-employee-user"
+
+var employeeDomains [2]string = [2]string{"cloud.statcan.ca", "statcan.gc.ca"}
 
 func sasImage(pod *corev1.Pod) bool {
 
@@ -28,9 +31,7 @@ func sasImage(pod *corev1.Pod) bool {
 	return false
 }
 
-func isEmployee(email string) bool {
-
-	employeeDomains := [2]string{"cloud.statcan.ca", "statcan.gc.ca"} // Intialized with values
+func internalUser(email string) bool {
 	for _, domain := range employeeDomains {
 		if strings.HasSuffix(email, domain) {
 			return true
@@ -39,20 +40,27 @@ func isEmployee(email string) bool {
 	return false
 }
 
+func isEmployee(rolebinding *rbacv1.RoleBinding) bool {
+	for _, subject := range rolebinding.Subjects {
+		email := subject.Name
+		if strings.Contains(email, "@") {
+			if !internalUser(email) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func (c *Controller) handleProfile(profile *v1.Profile) error {
 	namespace := profile.Name
+
+	// labels to set in Profile
 	hasEmpOnlyFeatures := false
+	nonEmployeeUser := false
 
-	// label set from rolebindings, if there are no rolebindings, then the default is that they are external
-	nonEmployeeUser := true
-
+	// check Pods
 	pods, err := c.podLister.Pods(namespace).List(labels.Everything())
-
-	if err != nil {
-		return err
-	}
-
-	roleBindings, err := c.roleBindingLister.RoleBindings(namespace).List(labels.Everything())
 
 	if err != nil {
 		return err
@@ -65,18 +73,21 @@ func (c *Controller) handleProfile(profile *v1.Profile) error {
 		}
 	}
 
+	// check RoleBindings
+	roleBindings, err := c.roleBindingLister.RoleBindings(namespace).List(labels.Everything())
+
+	if err != nil {
+		return err
+	}
+
 	for _, roleBindings := range roleBindings {
-		for _, subject := range roleBindings.Subjects {
-			email := subject.Name
-			if strings.Contains(email, "@") {
-				if isEmployee(email) {
-					nonEmployeeUser = false
-					break
-				}
-			}
+		if !isEmployee(roleBindings) {
+			nonEmployeeUser = true
+			break
 		}
 	}
 
+	// set Profile labels
 	if profile.Labels == nil {
 		profile.Labels = make(map[string]string)
 	}
