@@ -3,6 +3,9 @@
 This controller adds the `state.aaw.statcan.gc.ca/employee-only-features` label to the Profiles based on the Pods in that namespace. 
 If any Pods in that namespace are using a SAS image, it will set the label in the Profile to `true`, otherwise `false`.
 
+This controller also adds the `state.aaw.statcan.gc.ca/non-employee-user` label to the Profiles based on the RoleBindings in that namespace.
+If the RoleBinding shows that the user is external (email does not end with an accepted domain), it will set the label in the Profile to `true` otherwise `false`.
+
 ### How to Contribute
 
 See [CONTRIBUTING.md](CONTRIBUTING.md)

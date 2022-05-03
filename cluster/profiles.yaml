@@ -19,3 +19,14 @@ spec:
     kind: User
     name: bob@external.ca
   resourceQuotaSpec: {}
+---
+apiVersion: kubeflow.org/v1
+kind: Profile
+metadata:
+  name: sam
+spec:
+  owner:
+    kind: User
+    name: sam@external.ca
+  resourceQuotaSpec: {}
+

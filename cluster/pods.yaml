@@ -39,3 +39,23 @@ spec:
         limits:
           cpu: "100m"
           memory: "30Mi"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sam-true
+  namespace: sam
+spec:
+  containers:
+    - name: sam
+      image: "jupyter/datascience-notebook"
+      resources:
+        limits:
+          cpu: "100m"
+          memory: "30Mi"
+    - name: sam-other-container
+      image: "k8scc01covidacr.azurecr.io/sas:452"
+      resources:
+        limits:
+          cpu: "100m"
+          memory: "30Mi"

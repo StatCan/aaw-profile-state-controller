@@ -16,6 +16,10 @@ import (
 	k8sinformers "k8s.io/client-go/informers/core/v1"
 	k8slisters "k8s.io/client-go/listers/core/v1"
 
+	rbacv1informers "k8s.io/client-go/informers/rbac/v1"
+	rbacv1listers "k8s.io/client-go/listers/rbac/v1"
+
+	rbacv1 "k8s.io/api/rbac/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -39,6 +43,10 @@ type Controller struct {
 	profileInformerLister informers.ProfileInformer
 	profileSynched        cache.InformerSynced
 
+	roleBindingInformer rbacv1informers.RoleBindingInformer
+	roleBindingLister   rbacv1listers.RoleBindingLister
+	roleBindingSynced   cache.InformerSynced
+
 	workqueue workqueue.RateLimitingInterface
 	recorder  record.EventRecorder
 }
@@ -48,7 +56,8 @@ func NewController(
 	kubeclientset kubernetes.Interface,
 	kubeflowclientset kubeflow.Interface,
 	profileInformer informers.ProfileInformer,
-	podInformer k8sinformers.PodInformer) *Controller {
+	podInformer k8sinformers.PodInformer,
+	roleBindingInformer rbacv1informers.RoleBindingInformer) *Controller {
 
 	// Create event broadcaster
 	log.Info("creating event broadcaster")
@@ -64,6 +73,9 @@ func NewController(
 		podSynched:            podInformer.Informer().HasSynced,
 		profileInformerLister: profileInformer,
 		profileSynched:        profileInformer.Informer().HasSynced,
+		roleBindingInformer:   roleBindingInformer,
+		roleBindingLister:     roleBindingInformer.Lister(),
+		roleBindingSynced:     roleBindingInformer.Informer().HasSynced,
 		workqueue:             workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "PodPolicy"),
 		recorder:              recorder,
 	}
@@ -95,14 +107,43 @@ func NewController(
 		},
 		DeleteFunc: controller.handlePodObject,
 	})
+
+	// Set up an event handler for when RoleBinding resources change
+	roleBindingInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handleRoleBindingObject,
+		UpdateFunc: func(old, new interface{}) {
+			newrb := new.(*rbacv1.RoleBinding)
+			oldrb := old.(*rbacv1.RoleBinding)
+			if newrb.ResourceVersion == oldrb.ResourceVersion {
+				return
+			}
+			controller.handleRoleBindingObject(newrb)
+		},
+		DeleteFunc: controller.handleRoleBindingObject,
+	})
 	return controller
 }
 
 func (c *Controller) handlePodObject(npod interface{}) {
 	pod := npod.(*corev1.Pod)
 	namespace := pod.GetNamespace()
-	existingProfiles, _ := c.profileInformerLister.Lister().Get(namespace)
-	c.enqueueProfile(existingProfiles)
+	existingProfile, err := c.profileInformerLister.Lister().Get(namespace)
+	if err != nil {
+		log.Errorf("failed to get profile: %v", err)
+		return
+	}
+	c.enqueueProfile(existingProfile)
+}
+
+func (c *Controller) handleRoleBindingObject(newrb interface{}) {
+	roleBinding := newrb.(*rbacv1.RoleBinding)
+	namespace := roleBinding.GetNamespace()
+	existingProfile, err := c.profileInformerLister.Lister().Get(namespace)
+	if err != nil {
+		log.Errorf("failed to get profile - rb: %v", err)
+		return
+	}
+	c.enqueueProfile(existingProfile)
 }
 
 //Run runs the controller
@@ -168,11 +209,6 @@ func (c *Controller) processNextWorkItem() bool {
 }
 
 func (c *Controller) syncHandler(key string) error {
-	_, _, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
-		return nil
-	}
 
 	profile, err := c.profileInformerLister.Lister().Get(key)
 	if err != nil {
