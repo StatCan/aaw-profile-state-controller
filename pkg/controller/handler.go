@@ -15,7 +15,7 @@ import (
 
 const SAS_PREFIX = "k8scc01covidacr.azurecr.io/sas:"
 const FEATURES_LABEL = "state.aaw.statcan.gc.ca/employee-only-features"
-const RB_LABEL = "state.aaw.statcan.gc.ca/non-employee-user"
+const RB_LABEL = "state.aaw.statcan.gc.ca/non-employee-users"
 
 var employeeDomains [2]string = [2]string{"cloud.statcan.ca", "statcan.gc.ca"}
 
