@@ -43,8 +43,8 @@ func main() {
 		log.Fatalf("error building kubeflow client: %v", err)
 	}
 
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclient, time.Second*30)
-	kubeflowInformerFactory := informers.NewSharedInformerFactory(kubeflowclient, time.Second*30)
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeclient, time.Minute*5)
+	kubeflowInformerFactory := informers.NewSharedInformerFactory(kubeflowclient, time.Minute*5)
 
 	ctlr := controller.NewController(
 		kubeclient,
