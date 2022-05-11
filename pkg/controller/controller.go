@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"time"
 
-	v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
-	kubeflow "github.com/StatCan/kubeflow-controller/pkg/generated/clientset/versioned"
-	informers "github.com/StatCan/kubeflow-controller/pkg/generated/informers/externalversions/kubeflowcontroller/v1"
+	// v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
+	// kubeflow "github.com/StatCan/kubeflow-controller/pkg/generated/clientset/versioned"
+	// informers "github.com/StatCan/kubeflow-controller/pkg/generated/informers/externalversions/kubeflowcontroller/v1"
 
-	//v1 "github.com/StatCan/kubeflow-apis/apis/kubeflow/v1"
-	//kubeflow "github.com/StatCan/kubeflow-apis/clientset/versioned"
-	//informers "github.com/StatCan/kubeflow-apis/informers/externalversions/kubeflow/v1"
+	v1 "github.com/StatCan/kubeflow-apis/apis/kubeflow/v1"
+	kubeflow "github.com/StatCan/kubeflow-apis/clientset/versioned"
+	informers "github.com/StatCan/kubeflow-apis/informers/externalversions/kubeflow/v1"
+
 	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	k8sinformers "k8s.io/client-go/informers/core/v1"
@@ -127,7 +128,7 @@ func NewController(
 func (c *Controller) handlePodObject(npod interface{}) {
 	pod := npod.(*corev1.Pod)
 	namespace := pod.GetNamespace()
-	existingProfile, err := c.profileInformerLister.Lister().Get(namespace)
+	existingProfile, err := c.profileInformerLister.Lister().Profiles(namespace).Get(namespace)
 	if err != nil {
 		log.Errorf("failed to get profile: %v", err)
 		return
@@ -138,7 +139,7 @@ func (c *Controller) handlePodObject(npod interface{}) {
 func (c *Controller) handleRoleBindingObject(newrb interface{}) {
 	roleBinding := newrb.(*rbacv1.RoleBinding)
 	namespace := roleBinding.GetNamespace()
-	existingProfile, err := c.profileInformerLister.Lister().Get(namespace)
+	existingProfile, err := c.profileInformerLister.Lister().Profiles(namespace).Get(namespace)
 	if err != nil {
 		log.Errorf("failed to get profile - rb: %v", err)
 		return
@@ -210,7 +211,7 @@ func (c *Controller) processNextWorkItem() bool {
 
 func (c *Controller) syncHandler(key string) error {
 
-	profile, err := c.profileInformerLister.Lister().Get(key)
+	profile, err := c.profileInformerLister.Lister().Profiles(key).Get(key)
 	if err != nil {
 		log.Errorf("failed to get profile: %v", err)
 		return err

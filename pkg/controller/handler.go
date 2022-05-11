@@ -5,7 +5,10 @@ import (
 	"strconv"
 	"strings"
 
-	v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
+	//v1 "github.com/StatCan/kubeflow-controller/pkg/apis/kubeflowcontroller/v1"
+
+	v1 "github.com/StatCan/kubeflow-apis/apis/kubeflow/v1"
+
 	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -96,7 +99,7 @@ func (c *Controller) handleProfile(profile *v1.Profile) error {
 	profile.Labels[RB_LABEL] = strconv.FormatBool(nonEmployeeUser)
 
 	ctx := context.Background()
-	_, err = c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, profile, metav1.UpdateOptions{})
+	_, err = c.kubeflowClientset.KubeflowV1().Profiles(namespace).Update(ctx, profile, metav1.UpdateOptions{})
 	if err != nil {
 		return err
 	}

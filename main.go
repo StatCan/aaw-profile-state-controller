@@ -5,8 +5,12 @@ import (
 	"log"
 	"time"
 
-	kubeflow "github.com/StatCan/kubeflow-controller/pkg/generated/clientset/versioned"
-	informers "github.com/StatCan/kubeflow-controller/pkg/generated/informers/externalversions"
+	// kubeflow "github.com/StatCan/kubeflow-controller/pkg/generated/clientset/versioned"
+	// informers "github.com/StatCan/kubeflow-controller/pkg/generated/informers/externalversions"
+
+	kubeflow "github.com/StatCan/kubeflow-apis/clientset/versioned"
+	informers "github.com/StatCan/kubeflow-apis/informers/externalversions"
+
 	"github.com/statcan/profile-state-controller/pkg/controller"
 	"github.com/statcan/profile-state-controller/pkg/signals"
 	kubeinformers "k8s.io/client-go/informers"
