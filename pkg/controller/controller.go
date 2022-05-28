@@ -20,6 +20,7 @@ import (
 	rbacv1listers "k8s.io/client-go/listers/rbac/v1"
 
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -217,33 +218,53 @@ func (c *Controller) processNextWorkItem() bool {
 }
 
 func (c *Controller) syncHandler(key string) error {
-	// Get profile and namespace
+	//  _                     _ _                             __ _ _
+	// | |__   __ _ _ __   __| | | ___       _ __  _ __ ___  / _(_) | ___
+	// | '_ \ / _` | '_ \ / _` | |/ _ \     | '_ \| '__/ _ \| |_| | |/ _ \
+	// | | | | (_| | | | | (_| | |  __/     | |_) | | | (_) |  _| | |  __/
+	// |_| |_|\__,_|_| |_|\__,_|_|\___|     | .__/|_|  \___/|_| |_|_|\___|
+
+	// Get the profile and namespace associated with the current key.
 	profile, err := c.profileInformerLister.Lister().Get(key)
 	if err != nil {
-		log.Errorf("failed to get profile: %v", err)
+		log.Errorf("failed to get profile %v with error: %v", profile, err)
 		return err
 	}
 	namespace, err := c.namespaceInformerLister.Lister().Get(key)
-
+	if err != nil {
+		log.Errorf("failed to get profile %v with error: %v", profile, err)
+		return err
+	}
+	// Get the pods and rolebindings in the current namespace
+	// Note: profile.Name is used below instead of namespace as it is a string instead of
+	// type corev1.Namespace.
+	pods, err := c.podLister.Pods(profile.Name).List(labels.Everything())
+	if err != nil {
+		return err
+	}
+	roleBindings, err := c.roleBindingLister.RoleBindings(profile.Name).List(labels.Everything())
+	if err != nil {
+		return err
+	}
 	// Get the status of the profile/namespace
-	hasEmployeeOnlyFeatures, err := c.hasEmployeeOnlyFeatures(profile)
-	if err != nil {
-		return err
-	}
-	isNonEmployeeUser, err := c.isNonEmployeeUser(profile)
-	if err != nil {
-		return err
-	}
+	hasEmployeeOnlyFeatures := c.hasEmployeeOnlyFeatures(profile, pods)
+
+	isNonEmployeeUser := c.isNonEmployeeUser(profile, roleBindings)
 	// Handle the profile
 	err = c.handleProfile(profile, hasEmployeeOnlyFeatures, isNonEmployeeUser)
 	if err != nil {
 		log.Errorf("failed to handle profile: %v", err)
 		return err
 	}
-	// Handle the namespace
+	//  _                     _ _
+	// | |__   __ _ _ __   __| | | ___     _ __  ___
+	// | '_ \ / _` | '_ \ / _` | |/ _ \   | '_ \/ __|
+	// | | | | (_| | | | | (_| | |  __/   | | | \__ \
+	// |_| |_|\__,_|_| |_|\__,_|_|\___|   |_| |_|___/
+
 	err = c.handleNamespace(namespace, hasEmployeeOnlyFeatures, isNonEmployeeUser)
 	if err != nil {
-		log.Errorf("failed to handle namespace: %v", err)
+		log.Errorf("failed to handle namespace %v with error: %v", namespace, err)
 		return err
 	}
 

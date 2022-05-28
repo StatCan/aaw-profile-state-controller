@@ -10,7 +10,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 )
 
 const SAS_PREFIX = "k8scc01covidacr.azurecr.io/sas:"
@@ -52,18 +51,9 @@ func isEmployee(rolebinding *rbacv1.RoleBinding) bool {
 	return true
 }
 
-func (c *Controller) hasEmployeeOnlyFeatures(profile *v1.Profile) (bool, error) {
-	namespace := profile.Name
-
+func (c *Controller) hasEmployeeOnlyFeatures(profile *v1.Profile, pods []*corev1.Pod) bool {
 	// label to set
 	hasEmpOnlyFeatures := false
-
-	// check Pods
-	pods, err := c.podLister.Pods(namespace).List(labels.Everything())
-
-	if err != nil {
-		return false, err
-	}
 
 	for _, pod := range pods {
 		if sasImage(pod) {
@@ -72,21 +62,12 @@ func (c *Controller) hasEmployeeOnlyFeatures(profile *v1.Profile) (bool, error) 
 		}
 	}
 
-	return hasEmpOnlyFeatures, err
+	return hasEmpOnlyFeatures
 }
 
-func (c *Controller) isNonEmployeeUser(profile *v1.Profile) (bool, error) {
-	namespace := profile.Name
-
+func (c *Controller) isNonEmployeeUser(profile *v1.Profile, roleBindings []*rbacv1.RoleBinding) bool {
 	// label to set
 	nonEmployeeUser := false
-
-	// check RoleBindings
-	roleBindings, err := c.roleBindingLister.RoleBindings(namespace).List(labels.Everything())
-
-	if err != nil {
-		return false, err
-	}
 
 	for _, roleBindings := range roleBindings {
 		if !isEmployee(roleBindings) {
@@ -95,7 +76,7 @@ func (c *Controller) isNonEmployeeUser(profile *v1.Profile) (bool, error) {
 		}
 	}
 
-	return nonEmployeeUser, err
+	return nonEmployeeUser
 }
 
 func (c *Controller) handleProfile(profile *v1.Profile, hasEmployeeOnlyFeatures bool, isNonEmployeeUser bool) error {
