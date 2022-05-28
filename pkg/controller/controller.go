@@ -34,6 +34,7 @@ const controllerAgentName = "internal-user-controller"
 
 // Controller responds to new resources and applies the necessary configuration
 type Controller struct {
+	kubeclientset     kubernetes.Interface
 	kubeflowClientset kubeflow.Interface
 
 	podInformer k8sinformers.PodInformer
@@ -42,6 +43,9 @@ type Controller struct {
 
 	profileInformerLister informers.ProfileInformer
 	profileSynched        cache.InformerSynced
+
+	namespaceInformerLister k8sinformers.NamespaceInformer
+	namespaceSynced         cache.InformerSynced
 
 	roleBindingInformer rbacv1informers.RoleBindingInformer
 	roleBindingLister   rbacv1listers.RoleBindingLister
@@ -56,6 +60,7 @@ func NewController(
 	kubeclientset kubernetes.Interface,
 	kubeflowclientset kubeflow.Interface,
 	profileInformer informers.ProfileInformer,
+	namespaceInformer k8sinformers.NamespaceInformer,
 	podInformer k8sinformers.PodInformer,
 	roleBindingInformer rbacv1informers.RoleBindingInformer) *Controller {
 
@@ -67,17 +72,20 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeflowClientset:     kubeflowclientset,
-		podInformer:           podInformer,
-		podLister:             podInformer.Lister(),
-		podSynched:            podInformer.Informer().HasSynced,
-		profileInformerLister: profileInformer,
-		profileSynched:        profileInformer.Informer().HasSynced,
-		roleBindingInformer:   roleBindingInformer,
-		roleBindingLister:     roleBindingInformer.Lister(),
-		roleBindingSynced:     roleBindingInformer.Informer().HasSynced,
-		workqueue:             workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "PodPolicy"),
-		recorder:              recorder,
+		kubeclientset:           kubeclientset,
+		kubeflowClientset:       kubeflowclientset,
+		podInformer:             podInformer,
+		podLister:               podInformer.Lister(),
+		podSynched:              podInformer.Informer().HasSynced,
+		profileInformerLister:   profileInformer,
+		profileSynched:          profileInformer.Informer().HasSynced,
+		namespaceInformerLister: namespaceInformer,
+		namespaceSynced:         namespaceInformer.Informer().HasSynced,
+		roleBindingInformer:     roleBindingInformer,
+		roleBindingLister:       roleBindingInformer.Lister(),
+		roleBindingSynced:       roleBindingInformer.Informer().HasSynced,
+		workqueue:               workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "PodPolicy"),
+		recorder:                recorder,
 	}
 
 	// Set up an event handler for when Profile resources change
