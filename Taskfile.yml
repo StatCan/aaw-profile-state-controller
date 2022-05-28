@@ -9,7 +9,7 @@ vars:
     sh: |
       echo $(cd {{default "./" .GO_MODULE_PATH}} && go list ./... | tr '\n' ' ' || echo '"ERROR: Unable to discover Go package(s)"')
   LDFLAGS:
-  CLUSTER_NAME: sas-policy-cluster
+  CLUSTER_NAME: profile-state-controller
   CONTEXT_NAME: "k3d-{{.CLUSTER_NAME}}"
   KUBECTL: "kubectl --context={{.CONTEXT_NAME}}"
   KUBEAPPLY: "{{.KUBECTL}} apply"
@@ -146,13 +146,13 @@ tasks:
 
   create:users:
     prefix: ⚙️ users > create
-    desc: create user namespaces, profiles, and pods 
+    desc: create user namespaces, profiles, and pods
     cmds:
       - task: create:namespaces
       - task: create:pods
       - task: create:profiles
 
-  create:namespaces: 
+  create:namespaces:
     prefix: ⚙️ namespace > create
     desc: create namespaces for users
     cmds:
@@ -165,11 +165,12 @@ tasks:
     desc: create pods in cluster/pods.yaml
     cmds:
       - "{{.KUBEAPPLY}} -f ./cluster/pods.yaml"
-        
+
   create:profiles:
     prefix: ⚙️ profiles > create
     desc: create profiles in cluster/profiles.yaml
     cmds:
+      - "{{.KUBEAPPLY}} -f https://raw.githubusercontent.com/kubeflow/kubeflow/master/components/profile-controller/config/crd/bases/kubeflow.org_profiles.yaml"
       - "{{.KUBEAPPLY}} -f ./cluster/profiles.yaml"
 
   create:rolebindings:
@@ -177,9 +178,9 @@ tasks:
     desc: create rolebindings in cluster/rolebindings.yaml
     cmds:
       - "{{.KUBEAPPLY}} -f ./cluster/rolebindings.yaml"
-      
+
   go:deploy:
-    desc: build go files and run 
+    desc: build go files and run
     cmds:
       - go build .
       - ./profile-state-controller --kubeconfig ~/.kube/config
