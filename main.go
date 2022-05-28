@@ -50,6 +50,7 @@ func main() {
 		kubeclient,
 		kubeflowclient,
 		kubeflowInformerFactory.Kubeflow().V1().Profiles(),
+		kubeInformerFactory.Core().V1().Namespaces(),
 		kubeInformerFactory.Core().V1().Pods(),
 		kubeInformerFactory.Rbac().V1().RoleBindings(),
 	)
