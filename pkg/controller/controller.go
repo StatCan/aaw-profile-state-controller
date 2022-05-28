@@ -217,17 +217,33 @@ func (c *Controller) processNextWorkItem() bool {
 }
 
 func (c *Controller) syncHandler(key string) error {
-
+	// Get profile and namespace
 	profile, err := c.profileInformerLister.Lister().Get(key)
 	if err != nil {
 		log.Errorf("failed to get profile: %v", err)
 		return err
 	}
+	namespace, err := c.namespaceInformerLister.Lister().Get(key)
 
+	// Get the status of the profile/namespace
+	hasEmployeeOnlyFeatures, err := c.hasEmployeeOnlyFeatures(profile)
+	if err != nil {
+		return err
+	}
+	isNonEmployeeUser, err := c.isNonEmployeeUser(profile)
+	if err != nil {
+		return err
+	}
 	// Handle the profile
-	err = c.handleProfile(profile)
+	err = c.handleProfile(profile, hasEmployeeOnlyFeatures, isNonEmployeeUser)
 	if err != nil {
 		log.Errorf("failed to handle profile: %v", err)
+		return err
+	}
+	// Handle the namespace
+	err = c.handleNamespace(namespace, hasEmployeeOnlyFeatures, isNonEmployeeUser)
+	if err != nil {
+		log.Errorf("failed to handle namespace: %v", err)
 		return err
 	}
 
