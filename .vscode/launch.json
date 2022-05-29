@@ -15,6 +15,16 @@
                 "--kubeconfig",
                 "${env:KUBECONFIG}"
             ]
+        },
+        {
+            "name": "Debug Handler Unit Tests",
+            "type": "go",
+            "request": "launch",
+            "mode": "test",
+            "program": "${workspaceFolder}/pkg/controller/handler_test.go",
+            "env": {},
+            "args": [],
+            "showLog": true
         }
     ]
 }
