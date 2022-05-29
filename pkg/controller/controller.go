@@ -247,9 +247,9 @@ func (c *Controller) syncHandler(key string) error {
 		return err
 	}
 	// Get the status of the profile/namespace
-	hasEmployeeOnlyFeatures := c.hasEmployeeOnlyFeatures(profile, pods)
+	hasEmployeeOnlyFeatures := c.hasEmployeeOnlyFeatures(pods)
 
-	isNonEmployeeUser := c.isNonEmployeeUser(profile, roleBindings)
+	isNonEmployeeUser := c.hasNonEmployeeUser(roleBindings)
 	// Handle the profile
 	err = c.handleProfile(profile, hasEmployeeOnlyFeatures, isNonEmployeeUser)
 	if err != nil {

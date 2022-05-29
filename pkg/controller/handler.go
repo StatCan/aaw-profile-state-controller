@@ -51,7 +51,7 @@ func isEmployee(rolebinding *rbacv1.RoleBinding) bool {
 	return true
 }
 
-func (c *Controller) hasEmployeeOnlyFeatures(profile *v1.Profile, pods []*corev1.Pod) bool {
+func (c *Controller) hasEmployeeOnlyFeatures(pods []*corev1.Pod) bool {
 	// label to set
 	hasEmpOnlyFeatures := false
 
@@ -65,7 +65,7 @@ func (c *Controller) hasEmployeeOnlyFeatures(profile *v1.Profile, pods []*corev1
 	return hasEmpOnlyFeatures
 }
 
-func (c *Controller) isNonEmployeeUser(profile *v1.Profile, roleBindings []*rbacv1.RoleBinding) bool {
+func (c *Controller) hasNonEmployeeUser(roleBindings []*rbacv1.RoleBinding) bool {
 	// label to set
 	nonEmployeeUser := false
 
