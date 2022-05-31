@@ -8,17 +8,27 @@ spec:
     name: alice@external.ca
   resourceQuotaSpec: {}
 ---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: alice
+---
 apiVersion: kubeflow.org/v1
 kind: Profile
 metadata:
   name: bob
-  labels: 
+  labels:
     test: "true"
 spec:
   owner:
     kind: User
     name: bob@external.ca
   resourceQuotaSpec: {}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bob
 ---
 apiVersion: kubeflow.org/v1
 kind: Profile
@@ -29,4 +39,9 @@ spec:
     kind: User
     name: sam@external.ca
   resourceQuotaSpec: {}
-
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sam
+---

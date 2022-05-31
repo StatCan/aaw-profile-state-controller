@@ -11,6 +11,7 @@ import (
 	"github.com/statcan/profile-state-controller/pkg/signals"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -50,6 +51,7 @@ func main() {
 		kubeclient,
 		kubeflowclient,
 		kubeflowInformerFactory.Kubeflow().V1().Profiles(),
+		kubeInformerFactory.Core().V1().Namespaces(),
 		kubeInformerFactory.Core().V1().Pods(),
 		kubeInformerFactory.Rbac().V1().RoleBindings(),
 	)

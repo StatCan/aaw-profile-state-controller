@@ -17,7 +17,14 @@ require (
 )
 
 require (
+	cloud.google.com/go v0.65.0 // indirect
+	github.com/Azure/go-autorest/autorest v0.9.6 // indirect
+	github.com/Azure/go-autorest/autorest/adal v0.8.2 // indirect
+	github.com/Azure/go-autorest/autorest/date v0.2.0 // indirect
+	github.com/Azure/go-autorest/logger v0.1.0 // indirect
+	github.com/Azure/go-autorest/tracing v0.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/go-logr/logr v1.2.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect

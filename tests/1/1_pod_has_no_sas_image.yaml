@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: alice-jupyter
+  namespace: alice
+spec:
+  containers:
+    - name: alice
+      image: "jupyter/datascience-notebook"
+      resources:
+        limits:
+          cpu: "100m"
+          memory: "30Mi"

@@ -20,6 +20,7 @@ import (
 	rbacv1listers "k8s.io/client-go/listers/rbac/v1"
 
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -34,6 +35,7 @@ const controllerAgentName = "internal-user-controller"
 
 // Controller responds to new resources and applies the necessary configuration
 type Controller struct {
+	kubeclientset     kubernetes.Interface
 	kubeflowClientset kubeflow.Interface
 
 	podInformer k8sinformers.PodInformer
@@ -42,6 +44,9 @@ type Controller struct {
 
 	profileInformerLister informers.ProfileInformer
 	profileSynched        cache.InformerSynced
+
+	namespaceInformerLister k8sinformers.NamespaceInformer
+	namespaceSynced         cache.InformerSynced
 
 	roleBindingInformer rbacv1informers.RoleBindingInformer
 	roleBindingLister   rbacv1listers.RoleBindingLister
@@ -56,6 +61,7 @@ func NewController(
 	kubeclientset kubernetes.Interface,
 	kubeflowclientset kubeflow.Interface,
 	profileInformer informers.ProfileInformer,
+	namespaceInformer k8sinformers.NamespaceInformer,
 	podInformer k8sinformers.PodInformer,
 	roleBindingInformer rbacv1informers.RoleBindingInformer) *Controller {
 
@@ -67,17 +73,20 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeflowClientset:     kubeflowclientset,
-		podInformer:           podInformer,
-		podLister:             podInformer.Lister(),
-		podSynched:            podInformer.Informer().HasSynced,
-		profileInformerLister: profileInformer,
-		profileSynched:        profileInformer.Informer().HasSynced,
-		roleBindingInformer:   roleBindingInformer,
-		roleBindingLister:     roleBindingInformer.Lister(),
-		roleBindingSynced:     roleBindingInformer.Informer().HasSynced,
-		workqueue:             workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "PodPolicy"),
-		recorder:              recorder,
+		kubeclientset:           kubeclientset,
+		kubeflowClientset:       kubeflowclientset,
+		podInformer:             podInformer,
+		podLister:               podInformer.Lister(),
+		podSynched:              podInformer.Informer().HasSynced,
+		profileInformerLister:   profileInformer,
+		profileSynched:          profileInformer.Informer().HasSynced,
+		namespaceInformerLister: namespaceInformer,
+		namespaceSynced:         namespaceInformer.Informer().HasSynced,
+		roleBindingInformer:     roleBindingInformer,
+		roleBindingLister:       roleBindingInformer.Lister(),
+		roleBindingSynced:       roleBindingInformer.Informer().HasSynced,
+		workqueue:               workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "PodPolicy"),
+		recorder:                recorder,
 	}
 
 	// Set up an event handler for when Profile resources change
@@ -209,17 +218,36 @@ func (c *Controller) processNextWorkItem() bool {
 }
 
 func (c *Controller) syncHandler(key string) error {
-
+	// Get the profile and namespace associated with the current key.
 	profile, err := c.profileInformerLister.Lister().Get(key)
 	if err != nil {
-		log.Errorf("failed to get profile: %v", err)
+		log.Errorf("failed to get profile %v with error: %v", profile, err)
 		return err
 	}
-
-	// Handle the profile
-	err = c.handleProfile(profile)
+	namespace, err := c.namespaceInformerLister.Lister().Get(key)
 	if err != nil {
-		log.Errorf("failed to handle profile: %v", err)
+		log.Errorf("failed to get namespace %v with error: %v", namespace, err)
+		return err
+	}
+	// Get the pods and rolebindings in the current namespace
+	// Note: profile.Name is used below instead of namespace as it is a string instead of
+	// type corev1.Namespace.
+	pods, err := c.podLister.Pods(profile.Name).List(labels.Everything())
+	if err != nil {
+		return err
+	}
+	roleBindings, err := c.roleBindingLister.RoleBindings(profile.Name).List(labels.Everything())
+	if err != nil {
+		return err
+	}
+	// Get the status of the profile/namespace
+	hasEmployeeOnlyFeatures := c.hasEmployeeOnlyFeatures(pods)
+
+	isNonEmployeeUser := c.hasNonEmployeeUser(roleBindings)
+	// Handle the profile
+	err = c.handleProfileAndNamespace(profile, namespace, hasEmployeeOnlyFeatures, isNonEmployeeUser)
+	if err != nil {
+		log.Errorf("failed to handle profile or namespace: %v", err)
 		return err
 	}
 

@@ -10,7 +10,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 )
 
 const SAS_PREFIX = "k8scc01covidacr.azurecr.io/sas:"
@@ -52,19 +51,9 @@ func isEmployee(rolebinding *rbacv1.RoleBinding) bool {
 	return true
 }
 
-func (c *Controller) handleProfile(profile *v1.Profile) error {
-	namespace := profile.Name
-
-	// labels to set in Profile
+func (c *Controller) hasEmployeeOnlyFeatures(pods []*corev1.Pod) bool {
+	// label to set
 	hasEmpOnlyFeatures := false
-	nonEmployeeUser := false
-
-	// check Pods
-	pods, err := c.podLister.Pods(namespace).List(labels.Everything())
-
-	if err != nil {
-		return err
-	}
 
 	for _, pod := range pods {
 		if sasImage(pod) {
@@ -73,12 +62,12 @@ func (c *Controller) handleProfile(profile *v1.Profile) error {
 		}
 	}
 
-	// check RoleBindings
-	roleBindings, err := c.roleBindingLister.RoleBindings(namespace).List(labels.Everything())
+	return hasEmpOnlyFeatures
+}
 
-	if err != nil {
-		return err
-	}
+func (c *Controller) hasNonEmployeeUser(roleBindings []*rbacv1.RoleBinding) bool {
+	// label to set
+	nonEmployeeUser := false
 
 	for _, roleBindings := range roleBindings {
 		if !isEmployee(roleBindings) {
@@ -87,21 +76,41 @@ func (c *Controller) handleProfile(profile *v1.Profile) error {
 		}
 	}
 
+	return nonEmployeeUser
+}
+
+func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *corev1.Namespace, hasEmployeeOnlyFeatures bool, isNonEmployeeUser bool) error {
+	// set namespace labels
+	if namespace.Labels == nil {
+		namespace.Labels = make(map[string]string)
+	}
 	// set Profile labels
 	if profile.Labels == nil {
 		profile.Labels = make(map[string]string)
 	}
-
-	profile.Labels[FEATURES_LABEL] = strconv.FormatBool(hasEmpOnlyFeatures)
-	profile.Labels[RB_LABEL] = strconv.FormatBool(nonEmployeeUser)
+	// Update profile and namespace labels
+	profile.Labels[FEATURES_LABEL] = strconv.FormatBool(hasEmployeeOnlyFeatures)
+	profile.Labels[RB_LABEL] = strconv.FormatBool(isNonEmployeeUser)
+	namespace.Labels[FEATURES_LABEL] = strconv.FormatBool(hasEmployeeOnlyFeatures)
+	namespace.Labels[RB_LABEL] = strconv.FormatBool(isNonEmployeeUser)
 
 	ctx := context.Background()
-	_, err = c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, profile, metav1.UpdateOptions{})
+	// Update profile and namespace resources
+	_, err := c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, profile, metav1.UpdateOptions{})
+
 	if err != nil {
 		return err
 	}
 
-	log.Infof("Updated profile %v with labels", namespace)
+	log.Infof("Updated profile %v with labels", namespace.Name)
+
+	_, err = c.kubeclientset.CoreV1().Namespaces().Update(ctx, namespace, metav1.UpdateOptions{})
+
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Updated namespace %v with labels", namespace.Name)
 
 	return nil
 }
