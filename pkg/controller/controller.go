@@ -226,7 +226,7 @@ func (c *Controller) syncHandler(key string) error {
 	}
 	namespace, err := c.namespaceInformerLister.Lister().Get(key)
 	if err != nil {
-		log.Errorf("failed to get profile %v with error: %v", profile, err)
+		log.Errorf("failed to get namespace %v with error: %v", namespace, err)
 		return err
 	}
 	// Get the pods and rolebindings in the current namespace
