@@ -79,42 +79,32 @@ func (c *Controller) hasNonEmployeeUser(roleBindings []*rbacv1.RoleBinding) bool
 	return nonEmployeeUser
 }
 
-func (c *Controller) handleProfile(profile *v1.Profile, hasEmployeeOnlyFeatures bool, isNonEmployeeUser bool) error {
-	namespace := profile.Name
-
+func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *corev1.Namespace, hasEmployeeOnlyFeatures bool, isNonEmployeeUser bool) error {
+	// set namespace labels
+	if namespace.Labels == nil {
+		namespace.Labels = make(map[string]string)
+	}
 	// set Profile labels
 	if profile.Labels == nil {
 		profile.Labels = make(map[string]string)
 	}
-
+	// Update profile and namespace labels
 	profile.Labels[FEATURES_LABEL] = strconv.FormatBool(hasEmployeeOnlyFeatures)
 	profile.Labels[RB_LABEL] = strconv.FormatBool(isNonEmployeeUser)
+	namespace.Labels[FEATURES_LABEL] = strconv.FormatBool(hasEmployeeOnlyFeatures)
+	namespace.Labels[RB_LABEL] = strconv.FormatBool(isNonEmployeeUser)
 
 	ctx := context.Background()
-
+	// Update profile and namespace resources
 	_, err := c.kubeflowClientset.KubeflowV1().Profiles().Update(ctx, profile, metav1.UpdateOptions{})
 
 	if err != nil {
 		return err
 	}
 
-	log.Infof("Updated profile %v with labels", namespace)
+	log.Infof("Updated profile %v with labels", namespace.Name)
 
-	return nil
-}
-
-func (c *Controller) handleNamespace(namespace *corev1.Namespace, hasEmployeeOnlyFeatures bool, isNonEmployeeUser bool) error {
-	// set namespace labels
-	if namespace.Labels == nil {
-		namespace.Labels = make(map[string]string)
-	}
-
-	namespace.Labels[FEATURES_LABEL] = strconv.FormatBool(hasEmployeeOnlyFeatures)
-	namespace.Labels[RB_LABEL] = strconv.FormatBool(isNonEmployeeUser)
-
-	ctx := context.Background()
-
-	_, err := c.kubeclientset.CoreV1().Namespaces().Update(ctx, namespace, metav1.UpdateOptions{})
+	_, err = c.kubeclientset.CoreV1().Namespaces().Update(ctx, namespace, metav1.UpdateOptions{})
 
 	if err != nil {
 		return err

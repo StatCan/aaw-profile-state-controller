@@ -218,12 +218,6 @@ func (c *Controller) processNextWorkItem() bool {
 }
 
 func (c *Controller) syncHandler(key string) error {
-	//  _                     _ _                             __ _ _
-	// | |__   __ _ _ __   __| | | ___       _ __  _ __ ___  / _(_) | ___
-	// | '_ \ / _` | '_ \ / _` | |/ _ \     | '_ \| '__/ _ \| |_| | |/ _ \
-	// | | | | (_| | | | | (_| | |  __/     | |_) | | | (_) |  _| | |  __/
-	// |_| |_|\__,_|_| |_|\__,_|_|\___|     | .__/|_|  \___/|_| |_|_|\___|
-
 	// Get the profile and namespace associated with the current key.
 	profile, err := c.profileInformerLister.Lister().Get(key)
 	if err != nil {
@@ -251,20 +245,9 @@ func (c *Controller) syncHandler(key string) error {
 
 	isNonEmployeeUser := c.hasNonEmployeeUser(roleBindings)
 	// Handle the profile
-	err = c.handleProfile(profile, hasEmployeeOnlyFeatures, isNonEmployeeUser)
+	err = c.handleProfileAndNamespace(profile, namespace, hasEmployeeOnlyFeatures, isNonEmployeeUser)
 	if err != nil {
-		log.Errorf("failed to handle profile: %v", err)
-		return err
-	}
-	//  _                     _ _
-	// | |__   __ _ _ __   __| | | ___     _ __  ___
-	// | '_ \ / _` | '_ \ / _` | |/ _ \   | '_ \/ __|
-	// | | | | (_| | | | | (_| | |  __/   | | | \__ \
-	// |_| |_|\__,_|_| |_|\__,_|_|\___|   |_| |_|___/
-
-	err = c.handleNamespace(namespace, hasEmployeeOnlyFeatures, isNonEmployeeUser)
-	if err != nil {
-		log.Errorf("failed to handle namespace %v with error: %v", namespace, err)
+		log.Errorf("failed to handle profile or namespace: %v", err)
 		return err
 	}
 
