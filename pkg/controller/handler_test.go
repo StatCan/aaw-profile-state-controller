@@ -1,5 +1,5 @@
 /*
-These tests make use of hasEmployeeOnlyFeatures and isNonEmployeeUser with mocked rolebindings and pods.
+These tests make use of hasSasNotebookFeature and existsNonSasUser with mocked rolebindings and pods.
 
 Can parse Pod/RoleBinding specs from YAML files in tests/ folder and use the same YAML files to do an E2E
 test against a local k8s cluster like k3d.
@@ -93,51 +93,51 @@ func getRolebindings(filePath string) ([]*rbacv1.RoleBinding, error) {
 // | ||  __/\__ \ |_\__ \
 //  \__\___||___/\__|___/
 
-// If any pod in the list uses a SAS image, hasEmployeeOnlyFeatures should return true
+// If any pod in the list uses a SAS image, hasSasNotebookFeature should return true
 func TestAnyPodWithSASImageReturnsTrue(t *testing.T) {
 	pods, _ := getPods(filepath.Join(TEST_DIRECTORY, "1"))
-	result := mockController.hasEmployeeOnlyFeatures(pods)
+	result := mockController.hasSasNotebookFeature(pods)
 	if !result {
-		t.Fatalf("Expected hasEmployeeOnlyFeatures to return true because at least one pod contains a SAS image.")
+		t.Fatalf("Expected hasSasNotebookFeature to return true because at least one pod contains a SAS image.")
 	}
 }
 
 func TestNoPodWithSASImageReturnsFalse(t *testing.T) {
 	pods, _ := getPods(filepath.Join(TEST_DIRECTORY, "2"))
-	result := mockController.hasEmployeeOnlyFeatures(pods)
+	result := mockController.hasSasNotebookFeature(pods)
 	if result {
-		t.Fatalf("Expected hasEmployeeOnlyFeatures to return false because no pods contain a SAS image.")
+		t.Fatalf("Expected hasSasNotebookFeature to return false because no pods contain a SAS image.")
 	}
 }
 
 func TestEmptyPodListReturnsFalse(t *testing.T) {
 	pods := []*corev1.Pod{}
-	result := mockController.hasEmployeeOnlyFeatures(pods)
+	result := mockController.hasSasNotebookFeature(pods)
 	if result {
-		t.Fatalf("Expected hasEmployeeOnlyFeatures to return false because empty list of pods can't contain SAS image.")
+		t.Fatalf("Expected hasSasNotebookFeature to return false because empty list of pods can't contain SAS image.")
 	}
 }
 
 func TestAnyRolebindingWithNonEmployeeReturnsTrue(t *testing.T) {
 	rolebindings, _ := getRolebindings(filepath.Join(TEST_DIRECTORY, "4"))
-	result := mockController.hasNonEmployeeUser(rolebindings)
+	result := mockController.existsNonSasUser(rolebindings)
 	if !result {
-		t.Fatalf("Expected hasNonEmployeeUser to return true because at least one rolebinding contains a non-employee user.")
+		t.Fatalf("Expected existsNonSasUser to return true because at least one rolebinding contains a non-employee user.")
 	}
 }
 
 func TestNoRolebindingWithNonEmployeeReturnsFalse(t *testing.T) {
 	rolebindings, _ := getRolebindings(filepath.Join(TEST_DIRECTORY, "5"))
-	result := mockController.hasNonEmployeeUser(rolebindings)
+	result := mockController.existsNonSasUser(rolebindings)
 	if result {
-		t.Fatalf("Expected hasNonEmployeeUser to return false because no rolebindings contain a non-employee user.")
+		t.Fatalf("Expected existsNonSasUser to return false because no rolebindings contain a non-employee user.")
 	}
 }
 
 func TestEmptyRolebindingListReturnsFalse(t *testing.T) {
 	rolebindings := []*rbacv1.RoleBinding{}
-	result := mockController.hasNonEmployeeUser(rolebindings)
+	result := mockController.existsNonSasUser(rolebindings)
 	if result {
-		t.Fatalf("Expected hasNonEmployeeUser to return false because empty list of rolebindings contain a non-employee user.")
+		t.Fatalf("Expected existsNonSasUser to return false because empty list of rolebindings contain a non-employee user.")
 	}
 }

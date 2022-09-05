@@ -71,7 +71,7 @@ func (c *Controller) rolebindingContainsNonSasUser(rolebinding *rbacv1.RoleBindi
 		// iteration
 		if c.subjectInSasNotebookExceptionList(subject.Name) {
 			continue
-	}
+		}
 		// If we get to this point, the user is not a statcan employee and the user has not
 		// been granted an exception to use the SAS feeature. This is a sufficient condition
 		// for rolebindingContainsNonSasUser to return true.
