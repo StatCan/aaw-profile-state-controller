@@ -28,7 +28,9 @@ import (
 
 const TEST_DIRECTORY = "../../tests/"
 
-var mockController = Controller{}
+var mockController = Controller{
+	nonEmployeeExceptions: UnmarshalConf(filepath.Join(TEST_DIRECTORY, "non-employee-exceptions.yaml")),
+}
 
 // Load kubernetes object from YAML file
 func loadObjectFromYaml(filePath string) (runtime.Object, error) {

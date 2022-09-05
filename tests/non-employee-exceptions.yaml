@@ -1,0 +1,6 @@
+cloudMainExceptions:
+- john.doe@external.ca
+- jane.doe@notanemployee.ca
+sasNotebookExceptions:
+- alice.smith@external.ca
+- jane.doe@notanemployee.ca

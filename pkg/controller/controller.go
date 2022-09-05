@@ -54,6 +54,8 @@ type Controller struct {
 
 	workqueue workqueue.RateLimitingInterface
 	recorder  record.EventRecorder
+
+	nonEmployeeExceptions map[string][]string
 }
 
 // NewController creates a new Controller object.
@@ -87,6 +89,7 @@ func NewController(
 		roleBindingSynced:       roleBindingInformer.Informer().HasSynced,
 		workqueue:               workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "PodPolicy"),
 		recorder:                recorder,
+		nonEmployeeExceptions:   UnmarshalConf("./app/non-employee-exceptions.yaml"),
 	}
 
 	// Set up an event handler for when Profile resources change
