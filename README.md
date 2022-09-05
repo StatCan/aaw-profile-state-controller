@@ -13,9 +13,9 @@ If any Pods in that namespace are using a SAS image, it will set the label in th
 
 ### Unit Test Cases
 
-1. If **any pod** in a list of pods contains a SAS image, `hasEmployeeOnlyFeatures` should return `true`.
-2. If **no pod** in a list of pods contains a SAS image,  `hasEmployeeOnlyFeatures` should return `false`.
-3. If an empty list is passed to `hasEmployeeOnlyFeatures`, it should return `false`.
+1. If **any pod** in a list of pods contains a SAS image, `hasSasNotebookFeature` should return `true`.
+2. If **no pod** in a list of pods contains a SAS image,  `hasSasNotebookFeature` should return `false`.
+3. If an empty list is passed to `hasSasNotebookFeature`, it should return `false`.
 
 ## Non-Employee Users
 
@@ -33,9 +33,9 @@ Other applications on the cluster can use this label to make decisions based on 
 
 ### Unit Test Cases
 
-1. If **any rolebinding** in a list of rolebindings contains a non-employee user, `hasNonEmployeeUser` should return `true`.
-2. If **no rolebinding** in a list of rolebindings contains a non-employee user, `hasNonEmployeeUser` should return `false`.
-3. If an empty list is passed to `hasNonEmployeeUser`, it should return `false`.
+1. If **any rolebinding** in a list of rolebindings contains a non-employee user, `existsNonSasUser` should return `true`.
+2. If **no rolebinding** in a list of rolebindings contains a non-employee user, `existsNonSasUser` should return `false`.
+3. If an empty list is passed to `existsNonSasUser`, it should return `false`.
 
 
 The Gatekeeper Policies check for these labels in the Profile and allow objects to be created or denied accordingly. More information about these policies and how the objects interact can be found in their README in the Gatekeeper Policies repository (linked below).
