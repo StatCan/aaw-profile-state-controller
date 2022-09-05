@@ -160,7 +160,13 @@ func (c *Controller) existsNonCloudMainUser(roleBindings []*rbacv1.RoleBinding) 
 	return nonSasUser
 }
 
-func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *corev1.Namespace, hasEmployeeOnlyFeatures bool, isNonEmployeeUser bool) error {
+//              _                     _ _
+//  _ __  ___  | |__   __ _ _ __   __| | | ___ _ __
+// | '_ \/ __| | '_ \ / _` | '_ \ / _` | |/ _ \ '__|
+// | | | \__ \ | | | | (_| | | | | (_| | |  __/ |
+// |_| |_|___/ |_| |_|\__,_|_| |_|\__,_|_|\___|_|
+
+func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *corev1.Namespace, hasSasNotebookFeature bool, existsNonSasUser bool, existsNonCloudMainUser bool) error {
 	// set namespace labels
 	if namespace.Labels == nil {
 		namespace.Labels = make(map[string]string)
@@ -169,11 +175,15 @@ func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *c
 	if profile.Labels == nil {
 		profile.Labels = make(map[string]string)
 	}
-	// Update profile and namespace labels
-	profile.Labels[FEATURES_LABEL] = strconv.FormatBool(hasEmployeeOnlyFeatures)
-	profile.Labels[RB_LABEL] = strconv.FormatBool(isNonEmployeeUser)
-	namespace.Labels[FEATURES_LABEL] = strconv.FormatBool(hasEmployeeOnlyFeatures)
-	namespace.Labels[RB_LABEL] = strconv.FormatBool(isNonEmployeeUser)
+	// Update profile labels
+	profile.Labels[HAS_SAS_NOTEBOOK_FEATURE_LABEL] = strconv.FormatBool(hasSasNotebookFeature)
+	profile.Labels[EXISTS_NON_SAS_NOTEBOOK_USER_LABEL] = strconv.FormatBool(existsNonSasUser)
+	profile.Labels[EXISTS_NON_CLOUD_MAIN_USER_LABEL] = strconv.FormatBool(existsNonCloudMainUser)
+
+	// Update namespace labels
+	namespace.Labels[HAS_SAS_NOTEBOOK_FEATURE_LABEL] = strconv.FormatBool(hasSasNotebookFeature)
+	namespace.Labels[EXISTS_NON_SAS_NOTEBOOK_USER_LABEL] = strconv.FormatBool(existsNonSasUser)
+	namespace.Labels[EXISTS_NON_CLOUD_MAIN_USER_LABEL] = strconv.FormatBool(existsNonCloudMainUser)
 
 	ctx := context.Background()
 	// Update profile and namespace resources
