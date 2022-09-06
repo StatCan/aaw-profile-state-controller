@@ -75,7 +75,7 @@ func (c *Controller) rolebindingContainsNonSasUser(rolebinding *rbacv1.RoleBindi
 		// If we get to this point, the user is not a statcan employee and the user has not
 		// been granted an exception to use the SAS feeature. This is a sufficient condition
 		// for rolebindingContainsNonSasUser to return true.
-		return false
+		return true
 	}
 	return false
 }
@@ -98,8 +98,8 @@ func (c *Controller) existsNonSasUser(roleBindings []*rbacv1.RoleBinding) bool {
 	// label to set
 	nonSasUser := false
 
-	for _, roleBindings := range roleBindings {
-		if c.rolebindingContainsNonSasUser(roleBindings) {
+	for _, roleBinding := range roleBindings {
+		if c.rolebindingContainsNonSasUser(roleBinding) {
 			nonSasUser = true
 			break
 		}
@@ -135,29 +135,29 @@ func (c *Controller) rolebindingContainsNonCloudMainUser(rolebinding *rbacv1.Rol
 		}
 		// If the subject is in the exception list for SAS users, then we can continue to the next
 		// iteration
-		if c.subjectInSasNotebookExceptionList(subject.Name) {
+		if c.subjectInCloudMainExceptionList(subject.Name) {
 			continue
 		}
 		// If we get to this point, the user is not a statcan employee and the user has not
 		// been granted an exception to use the SAS feeature. This is a sufficient condition
 		// for rolebindingContainsNonSasUser to return true.
-		return false
+		return true
 	}
 	return false
 }
 
 func (c *Controller) existsNonCloudMainUser(roleBindings []*rbacv1.RoleBinding) bool {
 	// label to set
-	nonSasUser := false
+	nonCloudMainUser := false
 
-	for _, roleBindings := range roleBindings {
-		if !c.rolebindingContainsNonSasUser(roleBindings) {
-			nonSasUser = true
+	for _, roleBinding := range roleBindings {
+		if c.rolebindingContainsNonCloudMainUser(roleBinding) {
+			nonCloudMainUser = true
 			break
 		}
 	}
 
-	return nonSasUser
+	return nonCloudMainUser
 }
 
 //              _                     _ _
