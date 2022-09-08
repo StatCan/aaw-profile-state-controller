@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: non-employee-exceptions
+  namespace: statcan-system
+data:
+  'non-employee-exceptions.yaml': |-
+    cloudMainExceptions:
+    - john.doe@external.ca
+    - jane.doe@notanemployee.ca
+    sasNotebookExceptions:
+    - alice.smith@external.ca
+    - jane.doe@notanemployee.ca
+  

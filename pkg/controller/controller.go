@@ -54,6 +54,8 @@ type Controller struct {
 
 	workqueue workqueue.RateLimitingInterface
 	recorder  record.EventRecorder
+
+	nonEmployeeExceptions map[string][]string
 }
 
 // NewController creates a new Controller object.
@@ -87,6 +89,7 @@ func NewController(
 		roleBindingSynced:       roleBindingInformer.Informer().HasSynced,
 		workqueue:               workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "PodPolicy"),
 		recorder:                recorder,
+		nonEmployeeExceptions:   UnmarshalConf("./app/non-employee-exceptions.yaml"),
 	}
 
 	// Set up an event handler for when Profile resources change
@@ -240,12 +243,13 @@ func (c *Controller) syncHandler(key string) error {
 	if err != nil {
 		return err
 	}
-	// Get the status of the profile/namespace
-	hasEmployeeOnlyFeatures := c.hasEmployeeOnlyFeatures(pods)
+	// Handle SAS labels for namespace
+	hasSasNotebookFeature := c.hasSasNotebookFeature(pods)
+	existsNonSasUser := c.existsNonSasUser(roleBindings)
+	// Handle cloud main labels for namespace
+	existsNonCloudMainUser := c.existsNonCloudMainUser(roleBindings)
 
-	isNonEmployeeUser := c.hasNonEmployeeUser(roleBindings)
-	// Handle the profile
-	err = c.handleProfileAndNamespace(profile, namespace, hasEmployeeOnlyFeatures, isNonEmployeeUser)
+	err = c.handleProfileAndNamespace(profile, namespace, hasSasNotebookFeature, existsNonSasUser, existsNonCloudMainUser)
 	if err != nil {
 		log.Errorf("failed to handle profile or namespace: %v", err)
 		return err

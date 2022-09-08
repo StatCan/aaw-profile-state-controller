@@ -1,5 +1,5 @@
 /*
-These tests make use of hasEmployeeOnlyFeatures and isNonEmployeeUser with mocked rolebindings and pods.
+These tests make use of hasSasNotebookFeature and existsNonSasUser with mocked rolebindings and pods.
 
 Can parse Pod/RoleBinding specs from YAML files in tests/ folder and use the same YAML files to do an E2E
 test against a local k8s cluster like k3d.
@@ -28,7 +28,9 @@ import (
 
 const TEST_DIRECTORY = "../../tests/"
 
-var mockController = Controller{}
+var mockController = Controller{
+	nonEmployeeExceptions: UnmarshalConf(filepath.Join(TEST_DIRECTORY, "non-employee-exceptions.yaml")),
+}
 
 // Load kubernetes object from YAML file
 func loadObjectFromYaml(filePath string) (runtime.Object, error) {
@@ -91,51 +93,167 @@ func getRolebindings(filePath string) ([]*rbacv1.RoleBinding, error) {
 // | ||  __/\__ \ |_\__ \
 //  \__\___||___/\__|___/
 
-// If any pod in the list uses a SAS image, hasEmployeeOnlyFeatures should return true
+// If any pod in the list uses a SAS image, hasSasNotebookFeature should return true
 func TestAnyPodWithSASImageReturnsTrue(t *testing.T) {
 	pods, _ := getPods(filepath.Join(TEST_DIRECTORY, "1"))
-	result := mockController.hasEmployeeOnlyFeatures(pods)
+	result := mockController.hasSasNotebookFeature(pods)
 	if !result {
-		t.Fatalf("Expected hasEmployeeOnlyFeatures to return true because at least one pod contains a SAS image.")
+		t.Fatalf("Expected hasSasNotebookFeature to return true because at least one pod contains a SAS image.")
 	}
 }
 
 func TestNoPodWithSASImageReturnsFalse(t *testing.T) {
 	pods, _ := getPods(filepath.Join(TEST_DIRECTORY, "2"))
-	result := mockController.hasEmployeeOnlyFeatures(pods)
+	result := mockController.hasSasNotebookFeature(pods)
 	if result {
-		t.Fatalf("Expected hasEmployeeOnlyFeatures to return false because no pods contain a SAS image.")
+		t.Fatalf("Expected hasSasNotebookFeature to return false because no pods contain a SAS image.")
 	}
 }
 
 func TestEmptyPodListReturnsFalse(t *testing.T) {
 	pods := []*corev1.Pod{}
-	result := mockController.hasEmployeeOnlyFeatures(pods)
+	result := mockController.hasSasNotebookFeature(pods)
 	if result {
-		t.Fatalf("Expected hasEmployeeOnlyFeatures to return false because empty list of pods can't contain SAS image.")
+		t.Fatalf("Expected hasSasNotebookFeature to return false because empty list of pods can't contain SAS image.")
 	}
 }
 
 func TestAnyRolebindingWithNonEmployeeReturnsTrue(t *testing.T) {
 	rolebindings, _ := getRolebindings(filepath.Join(TEST_DIRECTORY, "4"))
-	result := mockController.hasNonEmployeeUser(rolebindings)
+	result := mockController.existsNonSasUser(rolebindings)
 	if !result {
-		t.Fatalf("Expected hasNonEmployeeUser to return true because at least one rolebinding contains a non-employee user.")
+		t.Fatalf("Expected existsNonSasUser to return true because at least one rolebinding contains a non-employee user.")
 	}
 }
 
 func TestNoRolebindingWithNonEmployeeReturnsFalse(t *testing.T) {
 	rolebindings, _ := getRolebindings(filepath.Join(TEST_DIRECTORY, "5"))
-	result := mockController.hasNonEmployeeUser(rolebindings)
+	result := mockController.existsNonSasUser(rolebindings)
 	if result {
-		t.Fatalf("Expected hasNonEmployeeUser to return false because no rolebindings contain a non-employee user.")
+		t.Fatalf("Expected existsNonSasUser to return false because no rolebindings contain a non-employee user.")
 	}
 }
 
 func TestEmptyRolebindingListReturnsFalse(t *testing.T) {
 	rolebindings := []*rbacv1.RoleBinding{}
-	result := mockController.hasNonEmployeeUser(rolebindings)
+	result := mockController.existsNonSasUser(rolebindings)
 	if result {
-		t.Fatalf("Expected hasNonEmployeeUser to return false because empty list of rolebindings contain a non-employee user.")
+		t.Fatalf("Expected existsNonSasUser to return false because empty list of rolebindings contain a non-employee user.")
 	}
+}
+
+//    					    _   _
+//   _____  _____ ___ _ __ | |_(_) ___  _ __     ___ __ _ ___  ___  ___
+//  / _ \ \/ / __/ _ \ '_ \| __| |/ _ \| '_ \   / __/ _` / __|/ _ \/ __|
+// |  __/>  < (_|  __/ |_) | |_| | (_) | | | | | (_| (_| \__ \  __/\__ \
+//  \___/_/\_\___\___| .__/ \__|_|\___/|_| |_|  \___\__,_|___/\___||___/
+// 				    |_|
+
+// If rolebinding contains only statcan domains --> profiles-state-controller should produce the labels
+// state.aaw.statcan.gc.ca/exists-non-sas-notebook-user: false and
+// state.aaw.statcan.gc.ca/exists-non-cloud-main-user: false
+
+func TestStatCanEmployeeOnlyReturnsFalseAndFalse(t *testing.T) {
+	rolebinding, _ := getRolebindings(filepath.Join(TEST_DIRECTORY, "exception_1"))
+	sasResult := mockController.existsNonSasUser(rolebinding)
+	cloudMainResult := mockController.existsNonCloudMainUser(rolebinding)
+	// if sasResult == False AND cloudMainResult == False, we are OK. Otherwise the test failed
+	if !sasResult && !cloudMainResult {
+		return
+	}
+	t.Fatalf("Expected state.aaw.statcan.gc.ca/exists-non-sas-notebook-user: false and state.aaw.statcan.gc.ca/exists-non-cloud-main-user: false")
+}
+
+// If rolebinding contains statcan domains AND a user with only the SAS exception --> profiles-state-controller should
+// produce the labels state.aaw.statcan.gc.ca/exists-non-sas-notebook-user: false and
+// state.aaw.statcan.gc.ca/exists-non-cloud-main-user: true
+
+func TestStatCanEmployeeAndSasExceptionReturnsFalseAndTrue(t *testing.T) {
+	rolebinding, _ := getRolebindings(filepath.Join(TEST_DIRECTORY, "exception_2"))
+	sasResult := mockController.existsNonSasUser(rolebinding)
+	cloudMainResult := mockController.existsNonCloudMainUser(rolebinding)
+	// if sasResult == False AND cloudMainResult == True, we are OK. Otherwise the test failed
+	if !sasResult && cloudMainResult {
+		return
+	}
+	t.Fatalf("Expected state.aaw.statcan.gc.ca/exists-non-sas-notebook-user: false and state.aaw.statcan.gc.ca/exists-non-cloud-main-user: true")
+}
+
+// If rolebinding contains statcan domains AND a user with only the cloud main exception --> profiles-state-controller
+// should produce the labels state.aaw.statcan.gc.ca/exists-non-sas-notebook-user: true and
+// state.aaw.statcan.gc.ca/exists-non-cloud-main-user: false
+
+func TestStatCanEmployeeAndCloudMainExceptionReturnsTrueAndFalse(t *testing.T) {
+	rolebinding, _ := getRolebindings(filepath.Join(TEST_DIRECTORY, "exception_3"))
+	sasResult := mockController.existsNonSasUser(rolebinding)
+	cloudMainResult := mockController.existsNonCloudMainUser(rolebinding)
+	// if sasResult == True AND cloudMainResult == False, we are OK. Otherwise the test failed
+	if sasResult && !cloudMainResult {
+		return
+	}
+	t.Fatalf("Expected state.aaw.statcan.gc.ca/exists-non-sas-notebook-user: true and state.aaw.statcan.gc.ca/exists-non-cloud-main-user: false")
+
+}
+
+// If rolebinding contains statcan domains AND a user with only the cloud main exception AND a user with only the SAS
+// exception --> profiles-state-controller should produce the labels
+// state.aaw.statcan.gc.ca/exists-non-sas-notebook-user: true and
+// state.aaw.statcan.gc.ca/exists-non-cloud-main-user: true
+
+func TestStatCanEmployeeAndCloudMainExceptionAndSasExceptionReturnsTrueAndTrue(t *testing.T) {
+	rolebinding, _ := getRolebindings(filepath.Join(TEST_DIRECTORY, "exception_4"))
+	sasResult := mockController.existsNonSasUser(rolebinding)
+	cloudMainResult := mockController.existsNonCloudMainUser(rolebinding)
+	// if sasResult == True AND cloudMainResult == True, we are OK. Otherwise the test failed
+	if sasResult && cloudMainResult {
+		return
+	}
+	t.Fatalf("Expected state.aaw.statcan.gc.ca/exists-non-sas-notebook-user: true and state.aaw.statcan.gc.ca/exists-non-cloud-main-user: true")
+}
+
+// If rolebinding contains external employees who all have both the cloud main exception and
+// the SAS exception --> profiles-state-controller should produce the labels
+// state.aaw.statcan.gc.ca/exists-non-sas-notebook-user: false and
+// state.aaw.statcan.gc.ca/exists-non-cloud-main-user: false
+
+func TestExternalEmployeesWithBothExceptionsReturnsFalseAndFalse(t *testing.T) {
+	rolebinding, _ := getRolebindings(filepath.Join(TEST_DIRECTORY, "exception_5"))
+	sasResult := mockController.existsNonSasUser(rolebinding)
+	cloudMainResult := mockController.existsNonCloudMainUser(rolebinding)
+	// if sasResult == False AND cloudMainResult == False, we are OK. Otherwise the test failed
+	if !sasResult && !cloudMainResult {
+		return
+	}
+	t.Fatalf("Expected state.aaw.statcan.gc.ca/exists-non-sas-notebook-user: false and state.aaw.statcan.gc.ca/exists-non-cloud-main-user: false")
+}
+
+// If rolebinding contains only external employees who have no exceptions --> profiles-state-controller
+// should produce the labels state.aaw.statcan.gc.ca/exists-non-sas-notebook-user: true and
+// state.aaw.statcan.gc.ca/exists-non-cloud-main-user: true
+
+func TestExternalEmployeesWithNoExceptionsReturnsTrueAndTrue(t *testing.T) {
+	rolebinding, _ := getRolebindings(filepath.Join(TEST_DIRECTORY, "exception_6"))
+	sasResult := mockController.existsNonSasUser(rolebinding)
+	cloudMainResult := mockController.existsNonCloudMainUser(rolebinding)
+	// if sasResult == True AND cloudMainResult == True, we are OK. Otherwise the test failed
+	if sasResult && cloudMainResult {
+		return
+	}
+	t.Fatalf("Expected state.aaw.statcan.gc.ca/exists-non-sas-notebook-user: true and state.aaw.statcan.gc.ca/exists-non-cloud-main-user: true")
+}
+
+// If a rolebinding contains StatCan employees AND a single external employee with no
+// exceptions --> profiles-state-controller should produce the labels
+// state.aaw.statcan.gc.ca/exists-non-sas-notebook-user: true and
+// state.aaw.statcan.gc.ca/exists-non-cloud-main-user: true
+
+func TestStatCanEmployeeAndUserWithNoExceptionsReturnsTrueAndTrue(t *testing.T) {
+	rolebinding, _ := getRolebindings(filepath.Join(TEST_DIRECTORY, "exception_7"))
+	sasResult := mockController.existsNonSasUser(rolebinding)
+	cloudMainResult := mockController.existsNonCloudMainUser(rolebinding)
+	// if sasResult == True AND cloudMainResult == True, we are OK. Otherwise the test failed
+	if sasResult && cloudMainResult {
+		return
+	}
+	t.Fatalf("Expected state.aaw.statcan.gc.ca/exists-non-sas-notebook-user: true and state.aaw.statcan.gc.ca/exists-non-cloud-main-user: true")
 }

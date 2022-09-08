@@ -13,10 +13,19 @@ import (
 )
 
 const SAS_PREFIX = "k8scc01covidacr.azurecr.io/sas:"
-const FEATURES_LABEL = "state.aaw.statcan.gc.ca/employee-only-features"
-const RB_LABEL = "state.aaw.statcan.gc.ca/non-employee-users"
+
+// Declare capability labels
+const HAS_SAS_NOTEBOOK_FEATURE_LABEL = "state.aaw.statcan.gc.ca/has-sas-notebook-feature"
+const EXISTS_NON_SAS_NOTEBOOK_USER_LABEL = "state.aaw.statcan.gc.ca/exists-non-sas-notebook-user"
+const EXISTS_NON_CLOUD_MAIN_USER_LABEL = "state.aaw.statcan.gc.ca/exists-non-cloud-main-user"
 
 var employeeDomains [2]string = [2]string{"cloud.statcan.ca", "statcan.gc.ca"}
+
+//  ____    _    ____    _   _       _       _                 _
+// / ___|  / \  / ___|  | \ | | ___ | |_ ___| |__   ___   ___ | | __
+// \___ \ / _ \ \___ \  |  \| |/ _ \| __/ _ \ '_ \ / _ \ / _ \| |/ /
+//  ___) / ___ \ ___) | | |\  | (_) | ||  __/ |_) | (_) | (_) |   <
+// |____/_/   \_\____/  |_| \_|\___/ \__\___|_.__/ \___/ \___/|_|\_\
 
 func sasImage(pod *corev1.Pod) bool {
 
@@ -39,47 +48,125 @@ func internalUser(email string) bool {
 	return false
 }
 
-func isEmployee(rolebinding *rbacv1.RoleBinding) bool {
-	for _, subject := range rolebinding.Subjects {
-		email := subject.Name
-		if strings.Contains(email, "@") {
-			if !internalUser(email) {
-				return false
-			}
+func (c *Controller) subjectInSasNotebookExceptionList(subject string) bool {
+	for _, exceptionCase := range c.nonEmployeeExceptions["sasNotebookExceptions"] {
+		if subject == exceptionCase {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
-func (c *Controller) hasEmployeeOnlyFeatures(pods []*corev1.Pod) bool {
+func (c *Controller) rolebindingContainsNonSasUser(rolebinding *rbacv1.RoleBinding) bool {
+	for _, subject := range rolebinding.Subjects {
+		// If the subject contains a Statcan employee email, there is nothing more to check.
+		// Continue to the next iteration
+		email := subject.Name
+		if strings.Contains(email, "@") {
+			if internalUser(email) {
+				continue
+			}
+		}
+		// If the subject is in the exception list for SAS users, then we can continue to the next
+		// iteration
+		if c.subjectInSasNotebookExceptionList(subject.Name) {
+			continue
+		}
+		// If we get to this point, the user is not a statcan employee and the user has not
+		// been granted an exception to use the SAS feeature. This is a sufficient condition
+		// for rolebindingContainsNonSasUser to return true.
+		return true
+	}
+	return false
+}
+
+func (c *Controller) hasSasNotebookFeature(pods []*corev1.Pod) bool {
 	// label to set
-	hasEmpOnlyFeatures := false
+	hasSasNotebookFeature := false
 
 	for _, pod := range pods {
 		if sasImage(pod) {
-			hasEmpOnlyFeatures = true
+			hasSasNotebookFeature = true
 			break
 		}
 	}
 
-	return hasEmpOnlyFeatures
+	return hasSasNotebookFeature
 }
 
-func (c *Controller) hasNonEmployeeUser(roleBindings []*rbacv1.RoleBinding) bool {
+func (c *Controller) existsNonSasUser(roleBindings []*rbacv1.RoleBinding) bool {
 	// label to set
-	nonEmployeeUser := false
+	nonSasUser := false
 
-	for _, roleBindings := range roleBindings {
-		if !isEmployee(roleBindings) {
-			nonEmployeeUser = true
+	for _, roleBinding := range roleBindings {
+		if c.rolebindingContainsNonSasUser(roleBinding) {
+			nonSasUser = true
 			break
 		}
 	}
 
-	return nonEmployeeUser
+	return nonSasUser
 }
 
-func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *corev1.Namespace, hasEmployeeOnlyFeatures bool, isNonEmployeeUser bool) error {
+//       _                 _                   _
+//   ___| | ___  _   _  __| |  _ __ ___   __ _(_)_ __
+//  / __| |/ _ \| | | |/ _` | | '_ ` _ \ / _` | | '_ \
+// | (__| | (_) | |_| | (_| | | | | | | | (_| | | | | |
+//  \___|_|\___/ \__,_|\__,_| |_| |_| |_|\__,_|_|_| |_|
+
+func (c *Controller) subjectInCloudMainExceptionList(subject string) bool {
+	for _, exceptionCase := range c.nonEmployeeExceptions["cloudMainExceptions"] {
+		if subject == exceptionCase {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Controller) rolebindingContainsNonCloudMainUser(rolebinding *rbacv1.RoleBinding) bool {
+	for _, subject := range rolebinding.Subjects {
+		// If the subject contains a Statcan employee email, there is nothing more to check.
+		// Continue to the next iteration
+		email := subject.Name
+		if strings.Contains(email, "@") {
+			if internalUser(email) {
+				continue
+			}
+		}
+		// If the subject is in the exception list for SAS users, then we can continue to the next
+		// iteration
+		if c.subjectInCloudMainExceptionList(subject.Name) {
+			continue
+		}
+		// If we get to this point, the user is not a statcan employee and the user has not
+		// been granted an exception to use the SAS feeature. This is a sufficient condition
+		// for rolebindingContainsNonSasUser to return true.
+		return true
+	}
+	return false
+}
+
+func (c *Controller) existsNonCloudMainUser(roleBindings []*rbacv1.RoleBinding) bool {
+	// label to set
+	nonCloudMainUser := false
+
+	for _, roleBinding := range roleBindings {
+		if c.rolebindingContainsNonCloudMainUser(roleBinding) {
+			nonCloudMainUser = true
+			break
+		}
+	}
+
+	return nonCloudMainUser
+}
+
+//              _                     _ _
+//  _ __  ___  | |__   __ _ _ __   __| | | ___ _ __
+// | '_ \/ __| | '_ \ / _` | '_ \ / _` | |/ _ \ '__|
+// | | | \__ \ | | | | (_| | | | | (_| | |  __/ |
+// |_| |_|___/ |_| |_|\__,_|_| |_|\__,_|_|\___|_|
+
+func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *corev1.Namespace, hasSasNotebookFeature bool, existsNonSasUser bool, existsNonCloudMainUser bool) error {
 	// set namespace labels
 	if namespace.Labels == nil {
 		namespace.Labels = make(map[string]string)
@@ -88,11 +175,15 @@ func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *c
 	if profile.Labels == nil {
 		profile.Labels = make(map[string]string)
 	}
-	// Update profile and namespace labels
-	profile.Labels[FEATURES_LABEL] = strconv.FormatBool(hasEmployeeOnlyFeatures)
-	profile.Labels[RB_LABEL] = strconv.FormatBool(isNonEmployeeUser)
-	namespace.Labels[FEATURES_LABEL] = strconv.FormatBool(hasEmployeeOnlyFeatures)
-	namespace.Labels[RB_LABEL] = strconv.FormatBool(isNonEmployeeUser)
+	// Update profile labels
+	profile.Labels[HAS_SAS_NOTEBOOK_FEATURE_LABEL] = strconv.FormatBool(hasSasNotebookFeature)
+	profile.Labels[EXISTS_NON_SAS_NOTEBOOK_USER_LABEL] = strconv.FormatBool(existsNonSasUser)
+	profile.Labels[EXISTS_NON_CLOUD_MAIN_USER_LABEL] = strconv.FormatBool(existsNonCloudMainUser)
+
+	// Update namespace labels
+	namespace.Labels[HAS_SAS_NOTEBOOK_FEATURE_LABEL] = strconv.FormatBool(hasSasNotebookFeature)
+	namespace.Labels[EXISTS_NON_SAS_NOTEBOOK_USER_LABEL] = strconv.FormatBool(existsNonSasUser)
+	namespace.Labels[EXISTS_NON_CLOUD_MAIN_USER_LABEL] = strconv.FormatBool(existsNonCloudMainUser)
 
 	ctx := context.Background()
 	// Update profile and namespace resources
