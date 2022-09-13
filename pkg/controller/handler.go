@@ -59,6 +59,10 @@ func (c *Controller) subjectInSasNotebookExceptionList(subject string) bool {
 
 func (c *Controller) rolebindingContainsNonSasUser(rolebinding *rbacv1.RoleBinding) bool {
 	for _, subject := range rolebinding.Subjects {
+		// If subject.Kind is not a user, then nothing below applies
+		if subject.Kind != "User" {
+			continue
+		}
 		// If the subject contains a Statcan employee email, there is nothing more to check.
 		// Continue to the next iteration
 		email := subject.Name
@@ -125,6 +129,10 @@ func (c *Controller) subjectInCloudMainExceptionList(subject string) bool {
 
 func (c *Controller) rolebindingContainsNonCloudMainUser(rolebinding *rbacv1.RoleBinding) bool {
 	for _, subject := range rolebinding.Subjects {
+		// If subject.Kind is not a user, then nothing below applies
+		if subject.Kind != "User" {
+			continue
+		}
 		// If the subject contains a Statcan employee email, there is nothing more to check.
 		// Continue to the next iteration
 		email := subject.Name
