@@ -50,10 +50,11 @@ func internalUser(email string) bool {
 
 func (c *Controller) subjectInSasNotebookExceptionList(subject string) bool {
 	for _, exceptionCase := range c.nonEmployeeExceptions["sasNotebookExceptions"] {
-		if subject == exceptionCase {
+		if subject == strings.TrimSpace(exceptionCase) {
 			return true
 		}
 	}
+	log.Infof("Found unexcepted SAS user %v", subject)
 	return false
 }
 
@@ -120,10 +121,11 @@ func (c *Controller) existsNonSasUser(roleBindings []*rbacv1.RoleBinding) bool {
 
 func (c *Controller) subjectInCloudMainExceptionList(subject string) bool {
 	for _, exceptionCase := range c.nonEmployeeExceptions["cloudMainExceptions"] {
-		if subject == exceptionCase {
+		if subject == strings.TrimSpace(exceptionCase) {
 			return true
 		}
 	}
+	log.Infof("Found unexcepted cloudmain user %v", subject)
 	return false
 }
 
@@ -201,7 +203,8 @@ func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *c
 		return err
 	}
 
-	log.Infof("Updated profile %v with labels", namespace.Name)
+	log.Infof("Updated profile %v with labels hasSasNotebookFeature=%t existsNonSasUser=%t existsNonCloudMainUser=%t",
+		namespace.Name, hasSasNotebookFeature, existsNonSasUser, existsNonCloudMainUser)
 
 	_, err = c.kubeclientset.CoreV1().Namespaces().Update(ctx, namespace, metav1.UpdateOptions{})
 
@@ -209,7 +212,8 @@ func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *c
 		return err
 	}
 
-	log.Infof("Updated namespace %v with labels", namespace.Name)
+	log.Infof("Updated namespace %v with labels hasSasNotebookFeature=%t existsNonSasUser=%t existsNonCloudMainUser=%t",
+		namespace.Name, hasSasNotebookFeature, existsNonSasUser, existsNonCloudMainUser)
 
 	return nil
 }
