@@ -203,7 +203,7 @@ func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *c
 		return err
 	}
 
-	log.Infof("Updated profile %v with labels hasSasNotebookFeature=%b existsNonSasUser=%b existsNonCloudMainUser=%b",
+	log.Infof("Updated profile %v with labels hasSasNotebookFeature=%t existsNonSasUser=%t existsNonCloudMainUser=%t",
 		namespace.Name, hasSasNotebookFeature, existsNonSasUser, existsNonCloudMainUser)
 
 	_, err = c.kubeclientset.CoreV1().Namespaces().Update(ctx, namespace, metav1.UpdateOptions{})
@@ -212,7 +212,7 @@ func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *c
 		return err
 	}
 
-	log.Infof("Updated namespace %v with labels hasSasNotebookFeature=%b existsNonSasUser=%b existsNonCloudMainUser=%b",
+	log.Infof("Updated namespace %v with labels hasSasNotebookFeature=%t existsNonSasUser=%t existsNonCloudMainUser=%t",
 		namespace.Name, hasSasNotebookFeature, existsNonSasUser, existsNonCloudMainUser)
 
 	return nil
