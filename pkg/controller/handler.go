@@ -50,7 +50,7 @@ func internalUser(email string) bool {
 
 func (c *Controller) subjectInSasNotebookExceptionList(subject string) bool {
 	for _, exceptionCase := range c.nonEmployeeExceptions["sasNotebookExceptions"] {
-		if subject == exceptionCase {
+		if subject == strings.TrimSpace(exceptionCase) {
 			return true
 		}
 	}
@@ -121,7 +121,7 @@ func (c *Controller) existsNonSasUser(roleBindings []*rbacv1.RoleBinding) bool {
 
 func (c *Controller) subjectInCloudMainExceptionList(subject string) bool {
 	for _, exceptionCase := range c.nonEmployeeExceptions["cloudMainExceptions"] {
-		if subject == exceptionCase {
+		if subject == strings.TrimSpace(exceptionCase) {
 			return true
 		}
 	}
