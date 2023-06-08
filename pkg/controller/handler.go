@@ -18,8 +18,19 @@ const SAS_PREFIX = "k8scc01covidacr.azurecr.io/sas:"
 const HAS_SAS_NOTEBOOK_FEATURE_LABEL = "state.aaw.statcan.gc.ca/has-sas-notebook-feature"
 const EXISTS_NON_SAS_NOTEBOOK_USER_LABEL = "state.aaw.statcan.gc.ca/exists-non-sas-notebook-user"
 const EXISTS_NON_CLOUD_MAIN_USER_LABEL = "state.aaw.statcan.gc.ca/exists-non-cloud-main-user"
+const EXISTS_INTERNAL_BLOB_STORAGE = "state.aaw.statcan.gc.ca/exists-internal-blob-storage"
+const NON_EMPLOYEE_USER = "state.aaw.statcan.gc.ca/non-employee-users"
 
 var employeeDomains [2]string = [2]string{"cloud.statcan.ca", "statcan.gc.ca"}
+
+func internalUser(email string) bool {
+	for _, domain := range employeeDomains {
+		if strings.HasSuffix(email, domain) {
+			return true
+		}
+	}
+	return false
+}
 
 //  ____    _    ____    _   _       _       _                 _
 // / ___|  / \  / ___|  | \ | | ___ | |_ ___| |__   ___   ___ | | __
@@ -36,15 +47,6 @@ func sasImage(pod *corev1.Pod) bool {
 		}
 	}
 
-	return false
-}
-
-func internalUser(email string) bool {
-	for _, domain := range employeeDomains {
-		if strings.HasSuffix(email, domain) {
-			return true
-		}
-	}
 	return false
 }
 
@@ -168,6 +170,54 @@ func (c *Controller) existsNonCloudMainUser(roleBindings []*rbacv1.RoleBinding) 
 	}
 
 	return nonCloudMainUser
+}
+
+//	 ___  _     ___   ___
+//	| _ )| |   / _ \ | _ )
+//	| _ \| |__| (_) || _ \
+//	|___/|____|\___/ |___/
+//
+// The objective here is to set labels used to prevent external employees from accessing internal FDI buckets
+// Case 1 is an Internal bucket is already mounted, if a pvc exists with "iprotb" or "iunc" in it's name
+// we know there's an internal bucket mounted and external users should be prevented from accessing it
+func (c *Controller) existsInternalCommonStorage(namespace corev1.Namespace) bool {
+	return false
+}
+
+// Case 2 is an external employee already exists and an internal bucket is to be created.
+// Blob csi controller would check this label and if true, would not create the PV/C
+func (c *Controller) roleBindingContainsNonEmployee(roleBinding *rbacv1.RoleBinding) bool {
+
+	for _, subject := range roleBinding.Subjects {
+		// If subject.Kind is not a user, then nothing below applies
+		if subject.Kind != "User" {
+			continue
+		}
+		// If the subject contains a Statcan employee email, there is nothing more to check.
+		// Continue to the next iteration
+		email := subject.Name
+		if strings.Contains(email, "@") {
+			if internalUser(email) {
+				continue
+			} else {
+				return true
+			}
+			// we only need this case to be satisfied once per namespace to know that an external user exists
+		}
+	}
+	return false
+}
+
+func (c *Controller) existsNonEmployee(roleBindings []*rbacv1.RoleBinding) bool {
+	nonEmployee := false
+
+	for _, roleBinding := range roleBindings {
+		if c.roleBindingContainsNonEmployee(roleBinding) {
+			nonEmployee = true
+			break
+		}
+	}
+	return nonEmployee
 }
 
 //              _                     _ _
