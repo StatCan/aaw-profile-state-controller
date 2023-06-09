@@ -180,12 +180,11 @@ func (c *Controller) existsNonCloudMainUser(roleBindings []*rbacv1.RoleBinding) 
 // The objective here is to set labels used to prevent external employees from accessing internal FDI buckets
 // Case 1 is an Internal bucket is already mounted, if a pvc exists with "iprotb" or "iunc" in it's name
 // we know there's an internal bucket mounted and external users should be prevented from accessing it
-func (c *Controller) existsInternalCommonStorage(namespace corev1.Namespace) bool {
+func (c *Controller) existsInternalCommonStorage(namespace *corev1.Namespace) bool {
 	return false
 }
 
-// Case 2 is an external employee already exists and an internal bucket is to be created.
-// Blob csi controller would check this label and if true, would not create the PV/C
+// possible to dissolve this into an above function to improve performance
 func (c *Controller) roleBindingContainsNonEmployee(roleBinding *rbacv1.RoleBinding) bool {
 
 	for _, subject := range roleBinding.Subjects {
@@ -200,14 +199,16 @@ func (c *Controller) roleBindingContainsNonEmployee(roleBinding *rbacv1.RoleBind
 			if internalUser(email) {
 				continue
 			} else {
+				// we only need this case to be satisfied once per namespace to know that an external user exists
 				return true
 			}
-			// we only need this case to be satisfied once per namespace to know that an external user exists
 		}
 	}
 	return false
 }
 
+// Case 2 is an external employee already exists and an internal bucket is to be created.
+// Blob csi controller would check this label and if true, would not create the PV/C
 func (c *Controller) existsNonEmployee(roleBindings []*rbacv1.RoleBinding) bool {
 	nonEmployee := false
 
@@ -226,7 +227,7 @@ func (c *Controller) existsNonEmployee(roleBindings []*rbacv1.RoleBinding) bool 
 // | | | \__ \ | | | | (_| | | | | (_| | |  __/ |
 // |_| |_|___/ |_| |_|\__,_|_| |_|\__,_|_|\___|_|
 
-func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *corev1.Namespace, hasSasNotebookFeature bool, existsNonSasUser bool, existsNonCloudMainUser bool) error {
+func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *corev1.Namespace, feats []bool) error {
 	// set namespace labels
 	if namespace.Labels == nil {
 		namespace.Labels = make(map[string]string)
@@ -236,14 +237,16 @@ func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *c
 		profile.Labels = make(map[string]string)
 	}
 	// Update profile labels
-	profile.Labels[HAS_SAS_NOTEBOOK_FEATURE_LABEL] = strconv.FormatBool(hasSasNotebookFeature)
-	profile.Labels[EXISTS_NON_SAS_NOTEBOOK_USER_LABEL] = strconv.FormatBool(existsNonSasUser)
-	profile.Labels[EXISTS_NON_CLOUD_MAIN_USER_LABEL] = strconv.FormatBool(existsNonCloudMainUser)
+	profile.Labels[HAS_SAS_NOTEBOOK_FEATURE_LABEL] = strconv.FormatBool(feats[0])
+	profile.Labels[EXISTS_NON_SAS_NOTEBOOK_USER_LABEL] = strconv.FormatBool(feats[1])
+	profile.Labels[EXISTS_NON_CLOUD_MAIN_USER_LABEL] = strconv.FormatBool(feats[2])
+	profile.Labels[NON_EMPLOYEE_USER] = strconv.FormatBool(feats[3])
 
 	// Update namespace labels
-	namespace.Labels[HAS_SAS_NOTEBOOK_FEATURE_LABEL] = strconv.FormatBool(hasSasNotebookFeature)
-	namespace.Labels[EXISTS_NON_SAS_NOTEBOOK_USER_LABEL] = strconv.FormatBool(existsNonSasUser)
-	namespace.Labels[EXISTS_NON_CLOUD_MAIN_USER_LABEL] = strconv.FormatBool(existsNonCloudMainUser)
+	namespace.Labels[HAS_SAS_NOTEBOOK_FEATURE_LABEL] = strconv.FormatBool(feats[0])
+	namespace.Labels[EXISTS_NON_SAS_NOTEBOOK_USER_LABEL] = strconv.FormatBool(feats[1])
+	namespace.Labels[EXISTS_NON_CLOUD_MAIN_USER_LABEL] = strconv.FormatBool(feats[2])
+	namespace.Labels[NON_EMPLOYEE_USER] = strconv.FormatBool(feats[3])
 
 	ctx := context.Background()
 	// Update profile and namespace resources
@@ -253,8 +256,8 @@ func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *c
 		return err
 	}
 
-	log.Infof("Updated profile %v with labels hasSasNotebookFeature=%t existsNonSasUser=%t existsNonCloudMainUser=%t",
-		namespace.Name, hasSasNotebookFeature, existsNonSasUser, existsNonCloudMainUser)
+	log.Infof("Updated profile %v with labels hasSasNotebookFeature=%t existsNonSasUser=%t existsNonCloudMainUser=%t nonEmployee=%t",
+		namespace.Name, feats[0], feats[1], feats[2], feats[3])
 
 	_, err = c.kubeclientset.CoreV1().Namespaces().Update(ctx, namespace, metav1.UpdateOptions{})
 
@@ -262,8 +265,8 @@ func (c *Controller) handleProfileAndNamespace(profile *v1.Profile, namespace *c
 		return err
 	}
 
-	log.Infof("Updated namespace %v with labels hasSasNotebookFeature=%t existsNonSasUser=%t existsNonCloudMainUser=%t",
-		namespace.Name, hasSasNotebookFeature, existsNonSasUser, existsNonCloudMainUser)
+	log.Infof("Updated namespace %v with labels hasSasNotebookFeature=%t existsNonSasUser=%t existsNonCloudMainUser=%t nonEmployee=%t",
+		namespace.Name, feats[0], feats[1], feats[2], feats[3])
 
 	return nil
 }
