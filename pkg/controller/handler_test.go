@@ -41,7 +41,7 @@ func loadObjectFromYaml(filePath string) (runtime.Object, error) {
 	decode := scheme.Codecs.UniversalDeserializer().Decode
 	obj, _, err := decode([]byte(yamlFile), nil, nil)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("Error while decoding YAML object. Err was: %s", err))
+		log.Fatalf(fmt.Sprintf("Error while decoding YAML object. Err was: %s", err))
 		return nil, err
 	}
 	return obj, err
@@ -85,6 +85,15 @@ func getRolebindings(filePath string) ([]*rbacv1.RoleBinding, error) {
 		rolebindings = append(rolebindings, rolebinding)
 	}
 	return rolebindings, nil
+}
+
+func getPVC(filePath string) (*corev1.PersistentVolumeClaim, error) {
+	obj, err := loadObjectFromYaml(filePath)
+	if err != nil {
+		return nil, err
+	}
+	pvc := obj.(*corev1.PersistentVolumeClaim)
+	return pvc, nil
 }
 
 //  _            _
@@ -139,6 +148,53 @@ func TestEmptyRolebindingListReturnsFalse(t *testing.T) {
 	result := mockController.existsNonSasUser(rolebindings)
 	if result {
 		t.Fatalf("Expected existsNonSasUser to return false because empty list of rolebindings contain a non-employee user.")
+	}
+}
+
+// expect true for existsNonEmployee return value
+func TestExistsNonEmployeeTrue(t *testing.T) {
+	rolebindings, _ := getRolebindings(filepath.Join(TEST_DIRECTORY, "4"))
+	result := mockController.existsNonEmployee(rolebindings)
+	if !result {
+		t.Fatalf("Expected existsNonEmployee to return true because at least one rolebinding contains a non-employee user.")
+	}
+}
+
+// expect false for existsNonEmployee return value
+func TestExistsNonEmployeeFalse(t *testing.T) {
+	rolebindings, _ := getRolebindings(filepath.Join(TEST_DIRECTORY, "5"))
+	result := mockController.existsNonEmployee(rolebindings)
+	if result {
+		t.Fatalf("Expected existsNonEmployee to return false because no rolebindings contain a non-employee user.")
+	}
+}
+
+func TestExistsNonEmployeeEmpty(t *testing.T) {
+	rolebindings := []*rbacv1.RoleBinding{}
+	result := mockController.existsNonEmployee(rolebindings)
+	if result {
+		t.Fatalf("Expected existsNonEmployee to return false because empty list of rolebindings contain a non-employee user.")
+	}
+}
+
+// can't actually test the existsInternalCommonStorage func since these tests simply use the yaml object
+// Instead we test the internalPVC() func which contains the selection logic
+func TestExistsInternalPVC(t *testing.T) {
+	// test for both "iunc" and "iprotb"
+	iuncPVC, _ := getPVC(filepath.Join(TEST_DIRECTORY, "blob/1/iunc_pvc_exists.yaml"))
+	result1 := mockController.internalPVC(iuncPVC.Name)
+	iprotBPVC, _ := getPVC(filepath.Join(TEST_DIRECTORY, "blob/1/iprotb_pvc_exists.yaml"))
+	result2 := mockController.internalPVC(iprotBPVC.Name)
+	if !(result1 && result2) {
+		t.Fatalf("Expected internalPVC to return true because the PVCs %s and %s contains substring `iunc`", iuncPVC.Name, iprotBPVC)
+	}
+}
+
+func TestNotExistsInternalPVC(t *testing.T) {
+	pvc, _ := getPVC(filepath.Join(TEST_DIRECTORY, "blob/2/internal_pvc_not_exists.yaml"))
+	result := mockController.internalPVC(pvc.Name)
+	if result {
+		t.Fatalf("Expected internalPVC to return false because the PVC %s does not contain the needed substring", pvc.Name)
 	}
 }
 

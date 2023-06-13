@@ -243,13 +243,21 @@ func (c *Controller) syncHandler(key string) error {
 	if err != nil {
 		return err
 	}
-	// Handle SAS labels for namespace
-	hasSasNotebookFeature := c.hasSasNotebookFeature(pods)
-	existsNonSasUser := c.existsNonSasUser(roleBindings)
-	// Handle cloud main labels for namespace
-	existsNonCloudMainUser := c.existsNonCloudMainUser(roleBindings)
 
-	err = c.handleProfileAndNamespace(profile, namespace, hasSasNotebookFeature, existsNonSasUser, existsNonCloudMainUser)
+	// for extensibility, use slice to store all bools to limit params on "handleProfileAndNamespace"
+	feats := make([]bool, 5)
+
+	// Handle SAS labels for namespace
+	feats[0] = c.hasSasNotebookFeature(pods)
+	feats[1] = c.existsNonSasUser(roleBindings)
+	// Handle cloud main labels for namespace
+	feats[2] = c.existsNonCloudMainUser(roleBindings)
+	// Handle Non Employees
+	feats[3] = c.existsNonEmployee(roleBindings)
+	// Handle fdi internal storage
+	feats[4] = c.existsInternalCommonStorage(namespace)
+
+	err = c.handleProfileAndNamespace(profile, namespace, feats)
 	if err != nil {
 		log.Errorf("failed to handle profile or namespace: %v", err)
 		return err
