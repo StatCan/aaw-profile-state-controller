@@ -245,7 +245,7 @@ func (c *Controller) syncHandler(key string) error {
 	}
 
 	// for extensibility, use slice to store all bools to limit params on "handleProfileAndNamespace"
-	feats := make([]bool, 4)
+	feats := make([]bool, 5)
 
 	// Handle SAS labels for namespace
 	feats[0] = c.hasSasNotebookFeature(pods)
