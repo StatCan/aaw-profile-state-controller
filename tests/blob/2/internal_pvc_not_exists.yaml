@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    blob.aaw.statcan.gc.ca/automount: "true"
+    data.statcan.gc.ca/classification: unclassified
+  name: fdi-test-eunc-unclassified
+  namespace: test
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 10T
+  storageClassName: ""
+  volumeMode: Filesystem
+  volumeName: aaw-team-fdi-unclassified-test-eunc
+status:
+  accessModes:
+  - ReadWriteMany
+  capacity:
+    storage: 10T
+  phase: Bound
