@@ -188,7 +188,7 @@ func (c *Controller) existsInternalCommonStorage(namespace *corev1.Namespace) bo
 		return false
 	}
 	for _, pvc := range pvcList.Items {
-		if internalPVC(pvc.Name) {
+		if c.internalPVC(pvc.Name) {
 			return true
 		} else {
 			continue
@@ -198,7 +198,7 @@ func (c *Controller) existsInternalCommonStorage(namespace *corev1.Namespace) bo
 }
 
 // helper func to check for internal bucket name through naming convention
-func internalPVC(pvcName string) bool {
+func (c *Controller) internalPVC(pvcName string) bool {
 	return strings.Contains(pvcName, "iunc") || strings.Contains(pvcName, "iprotb")
 }
 
