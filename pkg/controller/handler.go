@@ -180,14 +180,9 @@ func (c *Controller) existsNonCloudMainUser(roleBindings []*rbacv1.RoleBinding) 
 // The objective here is to set labels used to prevent external employees from accessing internal FDI buckets
 // Case 1 is an Internal bucket is already mounted, if a pvc exists with "iprotb" or "iunc" in it's name
 // we know there's an internal bucket mounted and external users should be prevented from accessing it
-func (c *Controller) existsInternalCommonStorage(namespace *corev1.Namespace) bool {
+func (c *Controller) existsInternalCommonStorage(pvcSlice []*corev1.PersistentVolumeClaim) bool {
 
-	pvcList, err := c.kubeclientset.CoreV1().PersistentVolumeClaims(namespace.Name).List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		log.Infof("Encountered error %t", err)
-		return false
-	}
-	for _, pvc := range pvcList.Items {
+	for _, pvc := range pvcSlice {
 		if c.internalPVC(pvc.Name) {
 			return true
 		} else {
