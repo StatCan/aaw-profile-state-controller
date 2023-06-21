@@ -7,8 +7,8 @@ import (
 
 	kubeflow "github.com/StatCan/kubeflow-controller/pkg/generated/clientset/versioned"
 	informers "github.com/StatCan/kubeflow-controller/pkg/generated/informers/externalversions"
-	"github.com/statcan/aaw-profile-state-controller/pkg/controller"
-	"github.com/statcan/aaw-profile-state-controller/pkg/signals"
+	"github.com/statcan/profile-state-controller/pkg/controller"
+	"github.com/statcan/profile-state-controller/pkg/signals"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
