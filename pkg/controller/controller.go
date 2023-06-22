@@ -52,6 +52,10 @@ type Controller struct {
 	roleBindingLister   rbacv1listers.RoleBindingLister
 	roleBindingSynced   cache.InformerSynced
 
+	persistentVolumeClaimInformer k8sinformers.PersistentVolumeClaimInformer
+	persistentVolumeClaimlister   k8slisters.PersistentVolumeClaimLister
+	persistentVolumeClaimSynced   cache.InformerSynced
+
 	workqueue workqueue.RateLimitingInterface
 	recorder  record.EventRecorder
 
@@ -65,7 +69,8 @@ func NewController(
 	profileInformer informers.ProfileInformer,
 	namespaceInformer k8sinformers.NamespaceInformer,
 	podInformer k8sinformers.PodInformer,
-	roleBindingInformer rbacv1informers.RoleBindingInformer) *Controller {
+	roleBindingInformer rbacv1informers.RoleBindingInformer,
+	persistentVolumeClaimInformer k8sinformers.PersistentVolumeClaimInformer) *Controller {
 
 	// Create event broadcaster
 	log.Info("creating event broadcaster")
@@ -75,21 +80,24 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	controller := &Controller{
-		kubeclientset:           kubeclientset,
-		kubeflowClientset:       kubeflowclientset,
-		podInformer:             podInformer,
-		podLister:               podInformer.Lister(),
-		podSynched:              podInformer.Informer().HasSynced,
-		profileInformerLister:   profileInformer,
-		profileSynched:          profileInformer.Informer().HasSynced,
-		namespaceInformerLister: namespaceInformer,
-		namespaceSynced:         namespaceInformer.Informer().HasSynced,
-		roleBindingInformer:     roleBindingInformer,
-		roleBindingLister:       roleBindingInformer.Lister(),
-		roleBindingSynced:       roleBindingInformer.Informer().HasSynced,
-		workqueue:               workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "PodPolicy"),
-		recorder:                recorder,
-		nonEmployeeExceptions:   UnmarshalConf("./app/non-employee-exceptions.yaml"),
+		kubeclientset:                 kubeclientset,
+		kubeflowClientset:             kubeflowclientset,
+		podInformer:                   podInformer,
+		podLister:                     podInformer.Lister(),
+		podSynched:                    podInformer.Informer().HasSynced,
+		profileInformerLister:         profileInformer,
+		profileSynched:                profileInformer.Informer().HasSynced,
+		namespaceInformerLister:       namespaceInformer,
+		namespaceSynced:               namespaceInformer.Informer().HasSynced,
+		roleBindingInformer:           roleBindingInformer,
+		roleBindingLister:             roleBindingInformer.Lister(),
+		roleBindingSynced:             roleBindingInformer.Informer().HasSynced,
+		persistentVolumeClaimInformer: persistentVolumeClaimInformer,
+		persistentVolumeClaimlister:   persistentVolumeClaimInformer.Lister(),
+		persistentVolumeClaimSynced:   persistentVolumeClaimInformer.Informer().HasSynced,
+		workqueue:                     workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "PodPolicy"),
+		recorder:                      recorder,
+		nonEmployeeExceptions:         UnmarshalConf("./app/non-employee-exceptions.yaml"),
 	}
 
 	// Set up an event handler for when Profile resources change
@@ -133,6 +141,21 @@ func NewController(
 		},
 		DeleteFunc: controller.handleRoleBindingObject,
 	})
+
+	// Set up an event handler for when PersistentVolumeClaim resources change
+	persistentVolumeClaimInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: controller.handlePVCObject,
+		UpdateFunc: func(old, new interface{}) {
+			newPVC := new.(*corev1.PersistentVolumeClaim)
+			oldPVC := old.(*corev1.PersistentVolumeClaim)
+			if newPVC.ResourceVersion == oldPVC.ResourceVersion {
+				return
+			}
+			controller.handlePVCObject(newPVC)
+		},
+		DeleteFunc: controller.handleRoleBindingObject,
+	})
+
 	return controller
 }
 
@@ -153,6 +176,17 @@ func (c *Controller) handleRoleBindingObject(newrb interface{}) {
 	existingProfile, err := c.profileInformerLister.Lister().Get(namespace)
 	if err != nil {
 		log.Errorf("failed to get profile - rb: %v", err)
+		return
+	}
+	c.enqueueProfile(existingProfile)
+}
+
+func (c *Controller) handlePVCObject(newPVC interface{}) {
+	pvc := newPVC.(*corev1.PersistentVolumeClaim)
+	namespace := pvc.GetNamespace()
+	existingProfile, err := c.profileInformerLister.Lister().Get(namespace)
+	if err != nil {
+		log.Errorf("failed to get profile - pvc: %v", err)
 		return
 	}
 	c.enqueueProfile(existingProfile)
@@ -243,7 +277,10 @@ func (c *Controller) syncHandler(key string) error {
 	if err != nil {
 		return err
 	}
-
+	pvcs, err := c.persistentVolumeClaimlister.PersistentVolumeClaims(profile.Name).List(labels.Everything())
+	if err != nil {
+		return err
+	}
 	// for extensibility, use slice to store all bools to limit params on "handleProfileAndNamespace"
 	feats := make([]bool, 5)
 
@@ -255,7 +292,7 @@ func (c *Controller) syncHandler(key string) error {
 	// Handle Non Employees
 	feats[3] = c.existsNonEmployee(roleBindings)
 	// Handle fdi internal storage
-	feats[4] = c.existsInternalCommonStorage(namespace)
+	feats[4] = c.existsInternalCommonStorage(pvcs)
 
 	err = c.handleProfileAndNamespace(profile, namespace, feats)
 	if err != nil {

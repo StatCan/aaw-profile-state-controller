@@ -54,6 +54,7 @@ func main() {
 		kubeInformerFactory.Core().V1().Namespaces(),
 		kubeInformerFactory.Core().V1().Pods(),
 		kubeInformerFactory.Rbac().V1().RoleBindings(),
+		kubeInformerFactory.Core().V1().PersistentVolumeClaims(),
 	)
 
 	kubeInformerFactory.Start(stopCh)
