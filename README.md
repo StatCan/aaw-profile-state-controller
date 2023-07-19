@@ -47,8 +47,11 @@ If the RoleBinding shows that the user is external (email does not end with an a
 
 Other applications on the cluster can use this label to make decisions based on whether namespaces contain non-employee users.
 
-### Unit Test Cases
+## FDI Storage Feature
+The FDI storage can be either an external or internal storage container. The controller uses the naming convention of the PVC to determine whether or not the containers are internal. If they are, it will set the label `state.aaw.statcan.gc.ca/exists-internal-blob-storage` to true. This label is used by the KFAM module in Kubeflow and prevents the addition of external users to the profile. 
 
+### Unit Test Cases
+See https://github.com/StatCan/aaw-profile-state-controller/blob/dd4f2944013f6d39709f80d0354fb8c09fddd131/pkg/controller/handler_test.go#L154 for the unit tests and relavent documentation.
 
 ### Implementation in Kubeflow
 **Add an External Contributor with a SAS image on your namespace**
