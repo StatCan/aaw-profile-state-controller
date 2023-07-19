@@ -6,16 +6,32 @@ The purpose of this controller is to ensure that profiles/namespaces are correct
 
 The sections below detail specific labels and the logic they use.
 
-## Employee Only Features
+The initial implementation involved the bundling of features into either employee or non-employee features, but the addition of exception lists introduced the requirement for more fine-grain discretionary access control. This means we have a label for each feature.
+## SAS notebook feature
 
-This controller adds the `state.aaw.statcan.gc.ca/employee-only-features` label to the Profiles based on the Pods in that namespace.
-If any Pods in that namespace are using a SAS image, it will set the label in the Profile to `true`, otherwise `false`.
+This controller adds the `state.aaw.statcan.gc.ca/hasSasNotebookFeature` and `state.aaw.statcan.gc.ca/existsNonSasUser` labels to the Profiles based on the Pods and users in that namespace.
+If any Pods in that namespace are using a SAS image, it will set the `state.aaw.statcan.gc.ca/hasSasNotebookFeature` label in the Profile to `true`, otherwise `false`.
+If any users in that namespace are not permitted to use SAS (i.e external users and not in exception list), it will set the `state.aaw.statcan.gc.ca/existsNonSasUser` label in the Profile to `true`, otherwise `false`.
+
+### Interaction with Gatekeeper
+
+The Gatekeeper Policies check for these labels in the Profile and allow objects to be created or denied accordingly. More information about these policies and how the objects interact can be found in their README in the Gatekeeper Policies repository (linked below).
+- [Deny External Users Policy](https://github.com/StatCan/gatekeeper-policies/tree/master/general/deny-external-users)
+  - `state.aaw.statcan.gc.ca/has-sas-notebook-feature` affects RoleBinding and AuthorizationPolicy objects - which allows or denies adding external contributors
+  - Checks to see if there are any pods with the SAS image running. If there are, then it will only allow the RoleBinding and AuthorizationPolicy to be created for internal users.
+- [Employee-Only Features Policy](https://github.com/StatCan/gatekeeper-policies/tree/master/pod-security-policy/deny-employee-only-features)
+  - `state.aaw.statcan.gc.ca/exists-non-sas-notebook-user` affects Pod and Notebook objects - which allows or denies creation of SAS Notebook Servers
+  - Checks to see if there are any external users in a namespace through a Profile label. If there are and they aren't in the [exception list](https://github.com/StatCan/aaw-kubeflow-profiles/blob/main/non-employee-exceptions-config.jsonnet), then it will not allow the SAS Pod and Notebook to be created.
 
 ### Unit Test Cases
 
 1. If **any pod** in a list of pods contains a SAS image, `hasSasNotebookFeature` should return `true`.
 2. If **no pod** in a list of pods contains a SAS image,  `hasSasNotebookFeature` should return `false`.
 3. If an empty list is passed to `hasSasNotebookFeature`, it should return `false`.
+
+4. If **any rolebinding** in a list of rolebindings contains a non-employee user, `existsNonSasUser` should return `true`.
+5. If **no rolebinding** in a list of rolebindings contains a non-employee user, `existsNonSasUser` should return `false`.
+6. If an empty list is passed to `existsNonSasUser`, it should return `false`.
 
 ## Non-Employee Users
 
@@ -33,18 +49,6 @@ Other applications on the cluster can use this label to make decisions based on 
 
 ### Unit Test Cases
 
-1. If **any rolebinding** in a list of rolebindings contains a non-employee user, `existsNonSasUser` should return `true`.
-2. If **no rolebinding** in a list of rolebindings contains a non-employee user, `existsNonSasUser` should return `false`.
-3. If an empty list is passed to `existsNonSasUser`, it should return `false`.
-
-
-The Gatekeeper Policies check for these labels in the Profile and allow objects to be created or denied accordingly. More information about these policies and how the objects interact can be found in their README in the Gatekeeper Policies repository (linked below).
-- [Deny External Users Policy](https://github.com/StatCan/gatekeeper-policies/tree/master/general/deny-external-users)
-  - `state.aaw.statcan.gc.ca/employee-only-features` affects RoleBinding and AuthorizationPolicy objects - which allows or denies adding external contributors
-  - Checks to see if there are any employee only features (like SAS images) in the namespace through a profile label. If there are, then it will only allow the RoleBinding and AuthorizationPolicy to be created for internal users.
-- [Employee-Only Features Policy](https://github.com/StatCan/gatekeeper-policies/tree/master/pod-security-policy/deny-employee-only-features)
-  - `state.aaw.statcan.gc.ca/non-employee-users` affects Pod and Notebook objects - which allows or denies creation of SAS Notebook Servers
-  - Checks to see if there are any external users in a namespace through a Profile label. If there are, then it will not allow the SAS Pod and Notebook to be created.
 
 ### Implementation in Kubeflow
 **Add an External Contributor with a SAS image on your namespace**
@@ -65,6 +69,9 @@ The Gatekeeper Policies check for these labels in the Profile and allow objects 
 
 **Sometimes it will take a few seconds in between removing/adding a contributor and notebook for the policies to take effect
 
+**Try to add an external users when you have an internal DAS common storage container mounted to your namespace**
+- check that the internal storage is mounted
+- If you try to add a contributor with an email domain not in `statcan.gc.ca` or `cloud.statcan.ca`, you will receive an error.
 
 
 ### How to Contribute
