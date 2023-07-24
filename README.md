@@ -9,9 +9,9 @@ The sections below detail specific labels and the logic they use.
 The initial implementation involved the bundling of features into either employee or non-employee features, but the addition of exception lists introduced the requirement for more fine-grain discretionary access control. This means we have a label for each feature.
 ## SAS notebook feature
 
-This controller adds the `state.aaw.statcan.gc.ca/hasSasNotebookFeature` and `state.aaw.statcan.gc.ca/existsNonSasUser` labels to the Profiles based on the Pods and users in that namespace.
-If any Pods in that namespace are using a SAS image, it will set the `state.aaw.statcan.gc.ca/hasSasNotebookFeature` label in the Profile to `true`, otherwise `false`.
-If any users in that namespace are not permitted to use SAS (i.e external users and not in exception list), it will set the `state.aaw.statcan.gc.ca/existsNonSasUser` label in the Profile to `true`, otherwise `false`.
+This controller adds the `state.aaw.statcan.gc.ca/has-sas-notebook-feature` and `state.aaw.statcan.gc.ca/exists-non-sas-notebook-user` labels to the Profiles based on the Pods and users in that namespace.
+If any Pods in that namespace are using a SAS image, it will set the `state.aaw.statcan.gc.ca/has-sas-notebook-feature` label in the Profile to `true`, otherwise `false`.
+If any users in that namespace are not permitted to use SAS (i.e external users and not in exception list), it will set the `state.aaw.statcan.gc.ca/exists-non-sas-notebook-user` label in the Profile to `true`, otherwise `false`.
 
 ### Interaction with Gatekeeper
 
